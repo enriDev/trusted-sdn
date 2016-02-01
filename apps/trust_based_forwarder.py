@@ -1,0 +1,598 @@
+'''
+Created on Nov 29, 2015
+
+- Unique module that learns hosts on-the fly
+- Discard doubled ARP requests to avoid ARP storming 
+
+@version: 1.0
+@author: root
+'''
+
+import sys
+import logging
+import struct
+import ConfigParser
+import six
+
+from ryu.base import app_manager
+from ryu.controller import handler
+from ryu.controller import ofp_event
+from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER
+from ryu.ofproto.ofproto_v1_3 import OFP_NO_BUFFER
+from ryu.lib.dpid import str_to_dpid
+from ryu.controller.handler import set_ev_cls
+from ryu.ofproto import ofproto_v1_3 as ofproto13
+from ryu.ofproto import ofproto_v1_3_parser as parser13
+from ryu.ofproto import ofproto_v1_0 as ofproto10
+from ryu.ofproto.ether import ETH_TYPE_LLDP, ETH_TYPE_ARP, ETH_TYPE_IP
+from ryu.lib.mac import haddr_to_bin, BROADCAST, BROADCAST_STR
+from ryu.lib.packet import packet
+from ryu.lib.packet import ethernet
+from ryu.lib.packet import icmp
+from ryu.lib.packet import ipv4
+from ryu.lib.packet import arp
+from ryu.lib import dpid
+from ryu.topology.api import get_switch, get_link, get_host
+from ryu.app.wsgi import ControllerBase
+from ryu.topology import event
+from ryu.lib import hub
+from ryu.lib.packet.arp import ARP_REQUEST, ARP_REPLY
+from __builtin__ import True
+
+import networkx as nx
+
+
+import trust_event
+import of_tb_func as of_func
+import trust_evaluator_v2_2
+import service_manager
+
+
+######## Global parameter#######
+# cfg file path
+SERVICE_CFG_PATH = 'services_cfg.ini'
+# lowest priority
+TABLE_MISS_PRIORITY = 0
+# table id for miss priority
+TABLE_MISS_TB_ID = 0
+
+
+
+
+
+class TrustBasedForwarder(app_manager.RyuApp):
+    
+    OFP_VERSION = [ofproto13.OFP_VERSION, ofproto10.OFP_VERSION]
+    
+    # defualt weight for the shortest path first algorithm
+    DEF_EDGE_WEIGHT = 0.01
+    # weight used to balance a new trust update
+    # The NEW_TRUST_VALUE_WEIGHT = (1 - OLD_TRUST_VALUE_WEIGHT)
+    OLD_TRUST_VALUE_WEIGHT = 0.6
+    # idle time out for new flow entries
+    IDLE_TIME_OUT = 25
+
+    #_CONTEXTS = {
+     #       'trust_evaluator_v2_2': trust_evaluator_v2_2.SwitchLinkTrustEvaluator
+      #  }
+    #_EVENTS = [trust_event.EventSwitchTrustChange, trust_event.EventLinkTrustChange]
+
+    def __init__(self, *args, **kwargs):
+        
+        super(TrustBasedForwarder, self).__init__(*args, **kwargs)
+        self.name = "TrustedBasedForwarder"
+        
+        #self.trust_evaluator = kwargs['trust_evaluator_v2_2']
+        
+        self.CONF.observe_links = True
+        
+        self.topology_api_app = self
+        # graph topology
+        self.net = nx.DiGraph()
+        # switches reference dict. dp -> datapath
+        self.dp_ref_dict = {}
+        # ARP proxy 
+        self.arp_proxy = ArpProxy(self)    
+        self.arp_table = {}     # ip -> mac
+      
+    
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+    def setup_flowtable(self, ev):
+        
+        datapath = ev.msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        
+        # install table-miss flow entry
+        # NO BUFFER option set
+        match = parser.OFPMatch()
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)]   #TODO set buffer on the switched
+        priority = TABLE_MISS_PRIORITY
+        of_func.ofAddFlow(datapath, match, actions, priority)
+    
+    
+    @set_ev_cls(event.EventSwitchEnter, MAIN_DISPATCHER)
+    def _new_switch_event(self, ev):
+             
+        self.logger.info('TOPO_EVENT: New switch detected %016x', ev.switch.dp.id)
+        
+        # add switches
+        switch_list = get_switch(self.topology_api_app, None)
+        #switches = [switch.dp.id for switch in switch_list]
+        switches = []
+        for switch in switch_list:
+            switches.append(switch.dp.id)
+            self.dp_ref_dict[switch.dp.id] = switch.dp
+            
+        self.net.add_nodes_from(switches)
+                
+        #print '****List of switches:'
+        #print switches
+        #for sw in switch_list:
+        #    for p in sw.ports:
+        #        print p
+        
+        
+    @set_ev_cls(event.EventSwitchLeave)
+    def _switch_leave_event(self, ev):
+        
+        self.logger.info('TOPO_EVENT: !!!! ALERT Switch leave %016x', ev.switch.dp.id)
+        #TODO handle the switch leave event
+        
+    @set_ev_cls(event.EventLinkAdd, MAIN_DISPATCHER)
+    def _new_link_event(self, ev):
+        
+        self.logger.info('TOPO_EVENT: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
+        
+        link_list = get_link(self.topology_api_app, None)
+        links = [(link.src.dpid, link.dst.dpid, {'port':link.src.port_no, 'weight':self.DEF_EDGE_WEIGHT}) for link in link_list]
+        self.net.add_edges_from(links)
+        
+        print '****List of links:'
+        print links
+        
+    
+    @set_ev_cls(event.EventLinkDelete)
+    def _link_delete_event(self,ev):
+        
+        self.logger.info('TOPO_EVENT: !!!! ALERTLink deleted %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
+    
+    
+    #set_ev_cls(service_manager.EventServiceDiscovered)
+    def service_discovered_event(self, ev):
+        
+        self.logger.info('TOPO_EVENT: New service detected: %s - %s', ev.service.name, ev.service.ip)
+        
+        service = ev.service
+        dpid = ev.dpid
+        port = ev.port
+        mac = service.mac
+        
+        self.net.add_node(mac)
+        self.net.add_edge(dpid, mac, {'port':port})
+        self.net.add_edge(mac, dpid)
+        
+        self.arp_table[service.ip] = mac
+        
+    
+        
+    @set_ev_cls(event.EventHostAdd, MAIN_DISPATCHER)
+    def _new_host_event(self, ev):   
+        
+        host = ev.host
+        host_mac = host.mac
+        dp_port = host.port.port_no
+        dpid = host.port.dpid
+        
+        # TODO temporary solution for fake host discovery. Refactoring needed
+        if host_mac == service_manager.ServiceDiscoveryPacket.CONTROLLER_MAC:
+            return
+        
+        # check if host already in net graph
+        if host_mac not in self.net:
+            self.logger.info('TOPO_EVENT: New host detected: %s - %s', ev.host.mac, ev.host.ipv4) 
+            self.net.add_node(host_mac)  
+            self.net.add_edge(dpid, host_mac, {'port': dp_port})
+            self.net.add_edge(host_mac, dpid)
+            self.arp_table[host.ipv4[0]] = host_mac
+            print 'update arp table ', self.arp_table
+        
+        
+    #set_ev_cls(trust_event.EventSwitchTrustChange, MAIN_DISPATCHER)
+    def _switch_trust_change_handler(self, ev):
+        
+        dpid = ev.dpid
+        trust = ev.trust
+        self.logger.info("TRUST_EVENT: dp: %s - trust: %s%%", dpid, trust*100)    
+        
+        
+    @set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
+    def _link_trust_change_handler(self, ev):
+        
+        link = ev.link
+        trust = ev.link_trust
+        #self.logger.info('TRUST_EVENT: Trust Metric update for link: %s -> %s - TM: %s%%', link.src.dpid, link.dst.dpid, trust*100)
+        
+        # keep a minimun trust value for dijkstra algorithm
+        if trust < self.DEF_EDGE_WEIGHT: 
+            trust = self.DEF_EDGE_WEIGHT
+        
+        self.update_link_trust (link, trust)
+        
+    
+    def update_link_trust(self, link, new_trust):
+        """ Allow to edit the edges weight of the graph"""
+        
+        src = link.src.dpid
+        dst = link.dst.dpid
+
+        try:
+            old_trust = self.net[src][dst]['weight']
+            balanced_trust = self.get_balanced_trust_value(old_trust, new_trust)
+            
+            self.logger.info('TOPO_EDGE_WEIGHT: updating trust metric: %s -> %s = %s', src, dst, balanced_trust)
+            self.net[src][dst]['weight'] = balanced_trust
+            #print "TOPO_EDGE_TRUST_LIST: " 
+            #for edge in self.net.edges(data=True): 
+            #    print edge 
+            
+        except KeyError as e:
+            self.logger.info('TOPO_EDGE_WEIGHT: node not found: %016x ...', e.args[0])
+        
+        
+    def get_balanced_trust_value (self, old_trust, new_trust):
+        
+        balanced_trust = self.OLD_TRUST_VALUE_WEIGHT*old_trust + (1 - self.OLD_TRUST_VALUE_WEIGHT)*new_trust
+        balanced_trust = round(balanced_trust, 4)
+        return balanced_trust
+   
+       
+    #
+    # At this point the controller has a global view of the network.
+    # The packet are forwarded based on shortest path first computation.
+    # Exceptions in forwarding are needed:
+    # - arp msgs are managed by ArpProxy object
+    # - lldp msgs are ignored
+    #
+    
+    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
+    def _packet_in_handler(self, ev):
+        
+        msg = ev.msg
+        datapath = msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+            
+        pck = packet.Packet(msg.data)        
+        eth = pck.get_protocol(ethernet.ethernet)
+        src = eth.src
+        dst = eth.dst
+        dpid = datapath.id
+        
+        # ignore lldp packet
+        if eth.ethertype == ETH_TYPE_LLDP:
+            return
+        
+        # ignore broadcast src
+        if src == BROADCAST_STR:
+            return
+        
+        #self.logger.info('\n'+'**PKT-IN: from dpid %s: %s \n',dpid, (pck,))
+        
+        # if arp delegate to ArpProxy
+        #if eth.ethertype == ETH_TYPE_ARP:
+            #print 'EVENT: ARP msg'
+            #self.arp_proxy.handle_arp(msg)
+            #ofPckOut(msg, ofproto.OFPP_FLOOD)
+            
+        if dst == BROADCAST_STR:
+            ip_dst = None
+            # arp packet, update ip address
+            if eth.ethertype == ETH_TYPE_ARP:
+                arp_pkt = pck.get_protocols(arp.arp)[0]
+                ip_dst = arp_pkt.dst_ip
+
+                # ipv4 packet, update ipv4 address
+            elif eth.ethertype == ETH_TYPE_IP:
+                ipv4_pkt = pck.get_protocols(ipv4.ipv4)[0]
+                ip_dst = ipv4_pkt.dst
+            
+            try:
+                dst = self.arp_table[ip_dst]
+            except KeyError:
+                self.logger.info("TRUST_FORWARDER: ip->mac mapping error")
+                return 
+                              
+        path = self.compute_routing_path(dpid, dst, "weight")
+        self.install_routing_path(path, msg)
+            
+          
+    def compute_routing_path(self, src, dst, weight = None):
+        """ Return a list of nodes for the path
+            @weight String. If "weight" trusted path is computed 
+        """        
+        try:
+            self.logger.info("PATH_SEARCH: Path %s --> %s",src, dst)
+            path = nx.shortest_path(self.net, src, dst, weight)
+            self.logger.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
+            return path
+        
+        except nx.NetworkXNoPath:
+            if dst not in self.net:
+                self.logger.info('NET_VIEW: Dst not found: %s', dst)
+            else:
+                self.logger.info('NET_VIEW: No path found: %s -> %s ', src, dst)
+        except nx.NetworkXError as e:
+            self.logger.info('NET_VIEW: Node not found: %s', e.args)
+  
+      
+    def install_routing_path(self, path, msg):
+        """ Set the flow tables for the new routing path and
+            forward the message
+        """
+        if path != None:
+            
+            pck = packet.Packet(msg.data)        
+            eth = pck.get_protocol(ethernet.ethernet)
+            #ip = pck.get_protocol(ipv4.ipv4)
+            #eth_type = eth.ethertype
+            #ip_proto = ip.proto         # TODO fix ofp match from msg
+            src = eth.src
+            dst = eth.dst
+            
+            # match for flow table entries
+            #match = parser13.OFPMatch(
+            #                          eth_src = src,
+            #                          eth_dst = dst,
+            #                          eth_type = eth_type,
+            #                          ip_proto = ip_proto)
+            
+            match = CustomOFPMatch.build_from_msg(msg)
+            print "DEBUG: build match from msg:/n", match 
+            
+            # exclude in the loop the last node in the path because it is an host
+            for i in range( len(path)-2, -1, -1 ):
+                
+                node = path[i]
+                out_port = self.get_next_out_port(path, node)
+                datapath = self.dp_ref_dict.get(node)
+                
+                actions = [parser13.OFPActionOutput(out_port)]
+                of_func.ofAddFlow(datapath = datapath, match = match,
+                        actions = actions, idle_timeout = self.IDLE_TIME_OUT, buffer_id = msg.buffer_id)
+        
+        
+    def get_next_out_port(self, path, node):
+        
+        next_hop = path[ path.index(node)+1 ]
+        out_port = self.net[node][next_hop]['port']
+        return out_port
+    
+    
+    def forward_msg(self, msg, src, dst):
+        
+        try:
+            datapath = msg.datapath
+            dpid = datapath.id
+            pck = packet.Packet(msg.data)        
+            eth = pck.get_protocol(ethernet.ethernet)
+            #eth_type = eth.ethertype
+            src = eth.src
+            dst = eth.dst
+
+            out_port = self._get_next_out_port(dpid, src, dst)
+                        
+            # install a flow to avoid packet in next time
+            #match = parser13.OFPMatch(
+            #                    in_port = msg.match['in_port'],
+            #                    eth_type = eth_type,
+            #                    eth_src = src,
+            #                    eth_dst = dst)
+            
+            match = CustomOFPMatch.build_from_msg(msg)
+            print "DEBUG: build match from msg:/n", match
+            
+            actions = [parser13.OFPActionOutput(out_port)]
+            of_func.ofAddFlow(datapath = datapath, match = match,
+                    actions = actions, buffer_id = msg.buffer_id)
+                
+        except nx.NetworkXNoPath:
+            if dst not in self.net:
+                self.logger.info('NET_VIEW: Dst not found: %s', dst)
+            else:
+                self.logger.info('NET_VIEW: No path found: %s -> %s ', src, dst)
+        except nx.NetworkXError as e:
+            self.logger.info('NET_VIEW: Node not found: %s', e.args)
+    
+    
+    
+    def _get_next_out_port(self, dpid, src, dst):
+         
+        self.logger.info("PATH_SEARCH: Shortest path first: from %s to %s", src, dst) 
+        path = nx.shortest_path(self.net, dpid, dst, 'weight')
+        next_hop = path[ path.index(dpid)+1 ]
+        out_port = self.net[dpid][next_hop]['port']
+        self.logger.info('PATH_SEARCH: Next hop: %s:%s -> %s',dpid, out_port, next_hop)
+        return out_port 
+    
+
+class CustomOFPMatch():
+    
+    @staticmethod
+    def build_from_msg(msg):
+        
+        pck = packet.Packet(msg.data)   
+        match_fields = {}               # match_field -> value
+        
+        try:     
+            i = iter(pck)
+
+            ## layer 2
+            # ethernet
+            eth_pkt = six.next(i)
+            assert type(eth_pkt) == ethernet.ethernet
+            match_fields['eth_dst'] = eth_pkt.dst
+            match_fields['eth_src'] = eth_pkt.src
+            match_fields['eth_type'] = eth_pkt.ethertype
+            
+            # layer 2.5 - 3
+            net_pkt = six.next(i) 
+    
+            # arp
+            if type(net_pkt) ==  arp.arp:
+                #match_fields['arp_op'] = net_pkt.opcode
+                match_fields['arp_spa'] = net_pkt.src_ip
+                match_fields['arp_tpa'] = net_pkt.dst_ip
+                #match_fields['arp_sha'] = net_pkt.src_mac
+                #match_fields['arp_tha'] = net_pkt.dst_mac
+                del match_fields['eth_dst']
+            
+            # ip 
+            elif type(net_pkt) == ipv4.ipv4:
+                match_fields['ip_proto'] = net_pkt.proto
+                match_fields['ipv4_src'] = net_pkt.src
+                match_fields['ipv4_dst'] = net_pkt.dst
+            
+            # layer 3.5 - 4
+            net_pkt = six.next(i)
+            
+            # icmp
+            #if type(net_pkt) == icmp.icmp:
+            #    match_fields['icmpv4_type'] = net_pkt.type
+            #    match_fields['icmpv4_code'] = net_pkt.code
+                
+            #TODO udp,tcp
+            
+        except StopIteration:
+            # the packet has no more layer.
+            # The match has been build
+            pass 
+        
+        match = parser13.OFPMatch(**match_fields)
+        return match
+
+
+class ArpProxy(object):
+    """ Manage the ARP message:
+         -  avoid arp storm
+         -  update net graph
+    """
+    
+    def __init__(self, trst_forwarder_ref, *args, **kwargs):
+        
+        self.arp_table = {}
+        # store already received arp req
+        self.arp_request_cache = {}
+        # object that request arp management
+        self.forwarder = trst_forwarder_ref
+           
+    def handle_arp (self, msg):
+        
+        pck = packet.Packet(msg.data)    
+        arp_pck = pck.get_protocol(arp.arp) 
+        
+        if arp_pck.opcode == ARP_REQUEST:
+            self._arp_request_handler(msg, arp_pck)
+            #self._broadcast_handler(msg, arp_pck)
+            
+            
+        elif arp_pck.opcode == ARP_REPLY:
+            self._arp_reply_handler(msg, arp_pck)     
+               
+    
+    def  _arp_request_handler(self, msg, arp_pck):
+        
+        datapath = msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        dpid = datapath.id
+        
+        src_mac = arp_pck.CONTROLLER_MAC
+        src_ip = arp_pck.src_ip
+        dst_mac = arp_pck.dst_mac
+        dst_ip = arp_pck.dst_ip
+        
+        # ignore gratuitus ARP
+        if src_mac == "00:00:00:00:00:00":
+            return
+        
+        # if the arp request has already crossed this dp ignore it
+        if self._dejavu_arp(dpid, src_mac, dst_ip):
+            print ('ARP dejavu at dpid: %s', dpid)
+            return
+        
+        # store packet in cache
+        self.arp_request_cache.setdefault(dpid, [])
+        self.arp_request_cache[dpid].append( [src_mac, dst_ip] )
+        
+        # arp req never seen before: flood
+        of_func.ofPckOut(msg, ofproto.OFPP_FLOOD)
+            
+    def _arp_reply_handler(self, msg, arp_pck):
+        
+        dpid = msg.datapath.id
+        src_mac = arp_pck.CONTROLLER_MAC
+        dst_mac = arp_pck.dst_mac
+        
+        # update graph if new host
+        #if src_mac not in self.forwarder.net:
+        #    self.forwarder.net.add_node(src_mac)
+        #    self.forwarder.net.add_edge(dpid, src_mac, {'port':msg.match['in_port']})
+        #    self.forwarder.net.add_edge(src_mac, dpid)
+        #    print 'TOPO_EVENT: new host from arp response'
+            
+        self.forwarder.forward_msg(msg, src_mac, dst_mac)
+        #path = self.forwarder.compute_routing_path(dpid, dst_mac)
+        #self.forwarder.install_routing_path(path, msg)
+        
+    
+    def _dejavu_arp(self, dpid, src_mac, dst_ip):
+        
+        if dpid in self.arp_request_cache:
+            for arplist in self.arp_request_cache[dpid]:
+                if arplist[0] == src_mac and arplist[1] == dst_ip:
+                    return True
+        return False
+                
+                
+    # TODO work in progress: see notes above            
+    def _broadcast_handler(self, msg, arp_pck):
+        """the purpose should be to broadcast msgs and avoid storm using 
+        spanning tree computation """
+        
+        datapath = msg.datapath
+        ofproto = datapath.ofproto
+        parser = datapath.ofproto_parser
+        dpid = datapath.id
+        
+        graph = self.forwarder.net
+        # convert direct -> undirect
+        undi_gr = graph.to_undirected()
+        # spanning tree
+        sp_tree = nx.minimum_spanning_tree(undi_gr)
+        print '###### Undirect graph'
+        print (sp_tree.edges(data=True))
+        
+        # convert undirect to direct
+        di_graph = nx.DiGraph()
+        for link in sp_tree.edges():
+            s = link[0]
+            d = link[1]
+            di_graph.add_edge(s, d, graph[s][d])
+            di_graph.add_edge(d, s, graph[d][s])
+        
+        print '#####Spannnin tree:'
+        print (di_graph.edges(data=True))
+        
+        #TODO now you must forward to all port of the switch except:
+        # - the port in wich the pkt was received
+        # - the ports not in spanning tree  
+        
+        
+        
+        
+        
+        
+        
+        
+        

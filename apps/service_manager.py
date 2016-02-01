@@ -65,11 +65,11 @@ class EventServiceDiscovered(event.EventBase):
 
 class ServiceManager(app_manager.RyuApp):
     
-    # time interval between discovery probing
-    TIMEOUT = 10
-    NUM_PROB_PKT = 2
-    # interval for avoiding burst
-    PROB_SEND_GUARD = 0.5
+    
+    TIMEOUT = 10            # time interval between discovery probing
+    NUM_PROB_PKT = 2        # nr probing pkts sent for services discovery
+    PROB_SEND_GUARD = 0.5   # interval for avoiding burst
+    
     
     _EVENTS = [EventServiceDiscovered]
     
@@ -83,7 +83,7 @@ class ServiceManager(app_manager.RyuApp):
         self.name = "ServiceManager"
         
         self.dp_dict = {}            # dpid -> datapath
-        self.services_dict = {}      # service name -> service obj
+        self.services_dict = {}      # service ip -> service obj
         self.discovered_service = 0  # counter for discovered services 
         
         self.load_services_config()
@@ -102,8 +102,8 @@ class ServiceManager(app_manager.RyuApp):
                 for param in params:
                     param_dict[param] = self.config.get(service, param)
                 service_obj = Service(**param_dict)
-                service_name = service_obj.name
-                self.services_dict[service_name] = service_obj
+                service_ip = service_obj.ip
+                self.services_dict[service_ip] = service_obj
                 
             self.logger.info("SERVICE_MGR: services loaded:")
             self.logger.info(self.services_dict)
@@ -118,6 +118,8 @@ class ServiceManager(app_manager.RyuApp):
             if service.mac == mac:
                 return service
         return None
+    
+
         
     
     @set_ev_cls(ofp_event.EventOFPStateChange, CONFIG_DISPATCHER)
@@ -202,7 +204,7 @@ class ServiceManager(app_manager.RyuApp):
             #self.reset_flowtable(datapath)
             
             # update the status of service (discovered)
-            self.services_dict[service.name].discovered = True
+            self.services_dict[service.ip].discovered = True
             self.discovered_service += 1
             print "discovered services:",self.discovered_service
             if self.all_services_discovered():

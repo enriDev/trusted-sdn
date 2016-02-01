@@ -13,6 +13,7 @@ import logging
 import struct
 import ConfigParser
 import six
+import abc
 
 from ryu.base import app_manager
 from ryu.controller import handler
@@ -64,6 +65,10 @@ class TrustBasedForwarder(app_manager.RyuApp):
     
     OFP_VERSION = [ofproto13.OFP_VERSION, ofproto10.OFP_VERSION]
     
+    _CONTEXTS = {
+            'service_manager': service_manager.ServiceManager
+        }
+    
     # defualt weight for the shortest path first algorithm
     DEF_EDGE_WEIGHT = 0.01
     # weight used to balance a new trust update
@@ -81,19 +86,13 @@ class TrustBasedForwarder(app_manager.RyuApp):
         
         super(TrustBasedForwarder, self).__init__(*args, **kwargs)
         self.name = "TrustedBasedForwarder"
+        self.service_manager = kwargs['service_manager']
         
-        #self.trust_evaluator = kwargs['trust_evaluator_v2_2']
-        
-        self.CONF.observe_links = True
-        
-        self.topology_api_app = self
-        # graph topology
-        self.net = nx.DiGraph()
-        # switches reference dict. dp -> datapath
-        self.dp_ref_dict = {}
-        # ARP proxy 
-        self.arp_proxy = ArpProxy(self)    
-        self.arp_table = {}     # ip -> mac
+        self.CONF.observe_links = True   #observe link option
+        self.topology_api_app = self     # self reference for topology api
+        self.net = nx.DiGraph()          # graph topology
+        self.dp_ref_dict = {}            # dpid -> datapath  
+        self.cache_ip_mac = {}           # ip -> mac
       
     
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -172,7 +171,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.net.add_edge(dpid, mac, {'port':port})
         self.net.add_edge(mac, dpid)
         
-        self.arp_table[service.ip] = mac
+        self.cache_ip_mac[service.ip] = mac
         
     
         
@@ -194,8 +193,8 @@ class TrustBasedForwarder(app_manager.RyuApp):
             self.net.add_node(host_mac)  
             self.net.add_edge(dpid, host_mac, {'port': dp_port})
             self.net.add_edge(host_mac, dpid)
-            self.arp_table[host.ipv4[0]] = host_mac
-            print 'update arp table ', self.arp_table
+            self.cache_ip_mac[host.ipv4[0]] = host_mac
+            print 'update arp table ', self.cache_ip_mac
         
         
     #set_ev_cls(trust_event.EventSwitchTrustChange, MAIN_DISPATCHER)
@@ -279,29 +278,35 @@ class TrustBasedForwarder(app_manager.RyuApp):
         
         #self.logger.info('\n'+'**PKT-IN: from dpid %s: %s \n',dpid, (pck,))
         
-        # if arp delegate to ArpProxy
-        #if eth.ethertype == ETH_TYPE_ARP:
-            #print 'EVENT: ARP msg'
-            #self.arp_proxy.handle_arp(msg)
-            #ofPckOut(msg, ofproto.OFPP_FLOOD)
-            
-        if dst == BROADCAST_STR:
-            ip_dst = None
-            # arp packet, update ip address
-            if eth.ethertype == ETH_TYPE_ARP:
-                arp_pkt = pck.get_protocols(arp.arp)[0]
-                ip_dst = arp_pkt.dst_ip
+        ip_dst = None
+        
+        # arp packet, update ip address
+        if eth.ehertype == ETH_TYPE_ARP:
+    
+            arp_pkt = pck.get_protocols(arp.arp)[0]
+            ip_dst = arp_pkt.dst_ip
 
-                # ipv4 packet, update ipv4 address
-            elif eth.ethertype == ETH_TYPE_IP:
-                ipv4_pkt = pck.get_protocols(ipv4.ipv4)[0]
-                ip_dst = ipv4_pkt.dst
+        # ipv4 packet, update ipv4 address
+        elif eth.ethertype == ETH_TYPE_IP:
+            ipv4_pkt = pck.get_protocols(ipv4.ipv4)[0]
+            ip_dst = ipv4_pkt.dst
+        
+        else:
+            self.logger.info("TRUST_FORWARDER: Unhandled case, ip not found:")
+            self.logger.info('\t'+'From dpid %s: %s \n',dpid, (pck,))
+            return
             
-            try:
-                dst = self.arp_table[ip_dst]
-            except KeyError:
-                self.logger.info("TRUST_FORWARDER: ip->mac mapping error")
-                return 
+        try:
+            # ask for routing_path object in case of msg for service
+            routing_path = self.service_manager.config_routing_path(ip_dst)
+        except: 
+            
+                
+        try:
+            dst = self.cache_ip_mac[ip_dst]
+        except KeyError:
+            self.logger.info("TRUST_FORWARDER: ip->mac mapping error")
+            return 
                               
         path = self.compute_routing_path(dpid, dst, "weight")
         self.install_routing_path(path, msg)
@@ -334,19 +339,10 @@ class TrustBasedForwarder(app_manager.RyuApp):
             
             pck = packet.Packet(msg.data)        
             eth = pck.get_protocol(ethernet.ethernet)
-            #ip = pck.get_protocol(ipv4.ipv4)
-            #eth_type = eth.ethertype
-            #ip_proto = ip.proto         # TODO fix ofp match from msg
             src = eth.src
             dst = eth.dst
             
-            # match for flow table entries
-            #match = parser13.OFPMatch(
-            #                          eth_src = src,
-            #                          eth_dst = dst,
-            #                          eth_type = eth_type,
-            #                          ip_proto = ip_proto)
-            
+            # build match from msg
             match = CustomOFPMatch.build_from_msg(msg)
             print "DEBUG: build match from msg:/n", match 
             
@@ -367,35 +363,46 @@ class TrustBasedForwarder(app_manager.RyuApp):
         next_hop = path[ path.index(node)+1 ]
         out_port = self.net[node][next_hop]['port']
         return out_port
-    
-    
-    def forward_msg(self, msg, src, dst):
-        
-        try:
-            datapath = msg.datapath
-            dpid = datapath.id
-            pck = packet.Packet(msg.data)        
-            eth = pck.get_protocol(ethernet.ethernet)
-            #eth_type = eth.ethertype
-            src = eth.src
-            dst = eth.dst
 
-            out_port = self._get_next_out_port(dpid, src, dst)
-                        
-            # install a flow to avoid packet in next time
-            #match = parser13.OFPMatch(
-            #                    in_port = msg.match['in_port'],
-            #                    eth_type = eth_type,
-            #                    eth_src = src,
-            #                    eth_dst = dst)
-            
-            match = CustomOFPMatch.build_from_msg(msg)
-            print "DEBUG: build match from msg:/n", match
-            
-            actions = [parser13.OFPActionOutput(out_port)]
-            of_func.ofAddFlow(datapath = datapath, match = match,
-                    actions = actions, buffer_id = msg.buffer_id)
-                
+
+
+class RoutingPathBase(object):
+    __metaclass__ = abc.ABCMeta
+    
+    def __init__(self, network_graph):
+        self.net = network_graph
+    
+    @abc.abstractmehod
+    def compute_routing_path(self, src, dst):
+        """ Return a list of nodes for the path
+            @weight String. Indicate the attribute to be used for 
+                    shortest path algorithm
+        """  
+        return
+
+class RandomRoutingPath(RoutingPathBase):
+    
+    def __init__(self, network_graph):
+        super.__init__(network_graph)
+        
+    def compute_routing_path(self, src, dst):
+        #TODO implement method
+        return
+        
+        
+class TrustedRoutingPath(RoutingPathBase):
+    
+    def __init__(self, network_graph):
+        super.__init__(network_graph)
+        
+    def compute_routing_path(self, src, dst):
+      
+        try:
+            self.logger.info("PATH_SEARCH: Path %s --> %s",src, dst)
+            path = nx.shortest_path(self.net, src, dst, 'weight')
+            self.logger.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
+            return path
+        
         except nx.NetworkXNoPath:
             if dst not in self.net:
                 self.logger.info('NET_VIEW: Dst not found: %s', dst)
@@ -403,18 +410,9 @@ class TrustBasedForwarder(app_manager.RyuApp):
                 self.logger.info('NET_VIEW: No path found: %s -> %s ', src, dst)
         except nx.NetworkXError as e:
             self.logger.info('NET_VIEW: Node not found: %s', e.args)
-    
-    
-    
-    def _get_next_out_port(self, dpid, src, dst):
-         
-        self.logger.info("PATH_SEARCH: Shortest path first: from %s to %s", src, dst) 
-        path = nx.shortest_path(self.net, dpid, dst, 'weight')
-        next_hop = path[ path.index(dpid)+1 ]
-        out_port = self.net[dpid][next_hop]['port']
-        self.logger.info('PATH_SEARCH: Next hop: %s:%s -> %s',dpid, out_port, next_hop)
-        return out_port 
-    
+
+
+
 
 class CustomOFPMatch():
     

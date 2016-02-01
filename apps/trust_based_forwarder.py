@@ -45,8 +45,8 @@ import networkx as nx
 
 import trust_event
 import of_tb_func as of_func
-import trust_evaluator_v2_2
-import service_manager
+import trust_evaluator
+from service_manager import ServiceManager
 
 
 ######## Global parameter#######
@@ -278,37 +278,46 @@ class TrustBasedForwarder(app_manager.RyuApp):
         
         #self.logger.info('\n'+'**PKT-IN: from dpid %s: %s \n',dpid, (pck,))
         
-        ip_dst = None
+        ip_dst = ip_src = None
         
         # arp packet, update ip address
         if eth.ehertype == ETH_TYPE_ARP:
     
             arp_pkt = pck.get_protocols(arp.arp)[0]
             ip_dst = arp_pkt.dst_ip
+            ip_dst = arp_pkt.src_ip
 
         # ipv4 packet, update ipv4 address
         elif eth.ethertype == ETH_TYPE_IP:
             ipv4_pkt = pck.get_protocols(ipv4.ipv4)[0]
             ip_dst = ipv4_pkt.dst
+            ip_src = ipv4_pkt.src
         
         else:
             self.logger.info("TRUST_FORWARDER: Unhandled case, ip not found:")
             self.logger.info('\t'+'From dpid %s: %s \n',dpid, (pck,))
             return
+        
+        routing_path = RoutingPathBase(self.net)
             
         try:
-            # ask for routing_path object in case of msg for service
-            routing_path = self.service_manager.config_routing_path(ip_dst)
-        except: 
+            # ask for routing_path object in case of msg directed to service
+            routing_path = self.service_manager.set_routing_path(ip_dst, ip_src)
+            routing_path.net = self.net
             
-                
+        except ServiceManager.InvalidService:
+            # the dst ip is not a service: use non-trusted path
+            routing_path = RandomRoutingPath(self.net)           
+        
         try:
+            # retrive the mac from ip
             dst = self.cache_ip_mac[ip_dst]
         except KeyError:
             self.logger.info("TRUST_FORWARDER: ip->mac mapping error")
             return 
-                              
-        path = self.compute_routing_path(dpid, dst, "weight")
+        
+        self.logger.into("TRUST_FORWARDER: RoutingPath used: %s", routing_path.__class__.__name__)
+        path = routing_path.compute_routing_path(dpid, dst)
         self.install_routing_path(path, msg)
             
           
@@ -369,7 +378,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
 class RoutingPathBase(object):
     __metaclass__ = abc.ABCMeta
     
-    def __init__(self, network_graph):
+    def __init__(self, network_graph=None):
         self.net = network_graph
     
     @abc.abstractmehod
@@ -382,7 +391,7 @@ class RoutingPathBase(object):
 
 class RandomRoutingPath(RoutingPathBase):
     
-    def __init__(self, network_graph):
+    def __init__(self, network_graph=None):
         super.__init__(network_graph)
         
     def compute_routing_path(self, src, dst):
@@ -392,7 +401,7 @@ class RandomRoutingPath(RoutingPathBase):
         
 class TrustedRoutingPath(RoutingPathBase):
     
-    def __init__(self, network_graph):
+    def __init__(self, network_graph=None):
         super.__init__(network_graph)
         
     def compute_routing_path(self, src, dst):

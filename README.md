@@ -1,2 +1,3 @@
 # trusted-sdn
-# moving project to github
+Project moved to github.
+

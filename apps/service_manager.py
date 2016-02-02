@@ -136,6 +136,7 @@ class ServiceManager(app_manager.RyuApp):
         
         # the service is or dst either src
         # evaluate security class
+        print 'DEBUG: asked routing path for: ', service.ip, ' sec clss: ', service.security_class
         serv_sec_cl = service.security_class
         if SecurityClass[serv_sec_cl] <= self.TRUST_THRES_DEF:
             return tbs.TrustedRoutingPath()
@@ -227,7 +228,7 @@ class ServiceManager(app_manager.RyuApp):
             # update the status of service (discovered)
             self.services_dict[service.ip].discovered = True
             self.discovered_service += 1
-            print "discovered services:",self.discovered_service
+            print "discovered services:",self.discovered_service, '-',service.ip
             if self.all_services_discovered():
                 self.stop_service_discovery()
                 self.logger.info("SERVICE_MGR: All services discovered.")
@@ -247,7 +248,6 @@ class ServiceManager(app_manager.RyuApp):
         self.unregister_handler(EventSwitchEnter, self._probe_switch)
         for datapath in self.dp_dict.values():
             self.reset_flowtable(datapath)
-
 
 
 class ServiceDiscoveryPacket():

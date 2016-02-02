@@ -46,7 +46,7 @@ import networkx as nx
 import trust_event
 import of_tb_func as of_func
 import trust_evaluator
-from service_manager import ServiceManager
+from service_manager import ServiceManager, ServiceDiscoveryPacket
 
 
 ######## Global parameter#######
@@ -65,9 +65,9 @@ class TrustBasedForwarder(app_manager.RyuApp):
     
     OFP_VERSION = [ofproto13.OFP_VERSION, ofproto10.OFP_VERSION]
     
-    _CONTEXTS = {
-            'service_manager': service_manager.ServiceManager
-        }
+    #_CONTEXTS = {
+    #        'ServiceManager': ServiceManager
+    #    }
     
     # defualt weight for the shortest path first algorithm
     DEF_EDGE_WEIGHT = 0.01
@@ -86,7 +86,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         
         super(TrustBasedForwarder, self).__init__(*args, **kwargs)
         self.name = "TrustedBasedForwarder"
-        self.service_manager = kwargs['service_manager']
+        #self.service_manager = kwargs['ServiceManager']
         
         self.CONF.observe_links = True   #observe link option
         self.topology_api_app = self     # self reference for topology api
@@ -184,7 +184,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         dpid = host.port.dpid
         
         # TODO temporary solution for fake host discovery. Refactoring needed
-        if host_mac == service_manager.ServiceDiscoveryPacket.CONTROLLER_MAC:
+        if host_mac == ServiceDiscoveryPacket.CONTROLLER_MAC:
             return
         
         # check if host already in net graph
@@ -281,7 +281,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         ip_dst = ip_src = None
         
         # arp packet, update ip address
-        if eth.ehertype == ETH_TYPE_ARP:
+        if eth.ethertype == ETH_TYPE_ARP:
     
             arp_pkt = pck.get_protocols(arp.arp)[0]
             ip_dst = arp_pkt.dst_ip
@@ -298,14 +298,15 @@ class TrustBasedForwarder(app_manager.RyuApp):
             self.logger.info('\t'+'From dpid %s: %s \n',dpid, (pck,))
             return
         
-        routing_path = RoutingPathBase(self.net)
-            
+        routing_path = RandomRoutingPath(self.net)
+        srv_mgr_ref = app_manager.lookup_service_brick('ServiceManager')
+          
         try:
             # ask for routing_path object in case of msg directed to service
-            routing_path = self.service_manager.set_routing_path(ip_dst, ip_src)
+            routing_path = srv_mgr_ref.set_routing_path(ip_dst, ip_src)
             routing_path.net = self.net
             
-        except ServiceManager.InvalidService:
+        except ServiceManager.ServiceNotFound:
             # the dst ip is not a service: use non-trusted path
             routing_path = RandomRoutingPath(self.net)           
         
@@ -316,7 +317,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
             self.logger.info("TRUST_FORWARDER: ip->mac mapping error")
             return 
         
-        self.logger.into("TRUST_FORWARDER: RoutingPath used: %s", routing_path.__class__.__name__)
+        self.logger.info("TRUST_FORWARDER: RoutingPath used: %s", routing_path.__class__.__name__)
         path = routing_path.compute_routing_path(dpid, dst)
         self.install_routing_path(path, msg)
             
@@ -381,7 +382,7 @@ class RoutingPathBase(object):
     def __init__(self, network_graph=None):
         self.net = network_graph
     
-    @abc.abstractmehod
+    @abc.abstractmethod
     def compute_routing_path(self, src, dst):
         """ Return a list of nodes for the path
             @weight String. Indicate the attribute to be used for 
@@ -392,7 +393,7 @@ class RoutingPathBase(object):
 class RandomRoutingPath(RoutingPathBase):
     
     def __init__(self, network_graph=None):
-        super.__init__(network_graph)
+        super(RandomRoutingPath, self).__init__(network_graph)
         
     def compute_routing_path(self, src, dst):
         #TODO implement method
@@ -402,7 +403,7 @@ class RandomRoutingPath(RoutingPathBase):
 class TrustedRoutingPath(RoutingPathBase):
     
     def __init__(self, network_graph=None):
-        super.__init__(network_graph)
+        super(TrustedRoutingPath, self).__init__(network_graph)
         
     def compute_routing_path(self, src, dst):
       

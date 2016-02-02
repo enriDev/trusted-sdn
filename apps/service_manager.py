@@ -44,7 +44,8 @@ import networkx as nx
 
 import trust_event
 import of_tb_func as of_func
-from pickle import TRUE
+import trust_based_forwarder as tbs
+from security_class import SecurityClass
 
 
 
@@ -69,6 +70,7 @@ class ServiceManager(app_manager.RyuApp):
     TIMEOUT = 10            # time interval between discovery probing
     NUM_PROB_PKT = 2        # nr probing pkts sent for services discovery
     PROB_SEND_GUARD = 0.5   # interval for avoiding burst
+    TRUST_THRES_DEF = 1     # define which security class must use trusted routing
     
     
     _EVENTS = [EventServiceDiscovered]
@@ -119,7 +121,26 @@ class ServiceManager(app_manager.RyuApp):
                 return service
         return None
     
-
+    
+    def set_routing_path(self, ip_dst, ip_src):
+        
+        service = None
+        if ip_dst in self.services_dict.keys():
+            service = self.services_dict[ip_dst]
+            
+        elif ip_src in self.services_dict.keys():
+            service = self.services_dict[ip_src]
+            
+        else:
+            raise self.ServiceNotFound
+        
+        # the service is or dst either src
+        # evaluate security class
+        serv_sec_cl = service.security_class
+        if SecurityClass[serv_sec_cl] <= self.TRUST_THRES_DEF:
+            return tbs.TrustedRoutingPath()
+        return tbs.RandomRoutingPath()
+            
         
     
     @set_ev_cls(ofp_event.EventOFPStateChange, CONFIG_DISPATCHER)

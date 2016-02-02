@@ -85,7 +85,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         
         super(SwitchLinkTrustEvaluator, self).__init__(*args, **kwargs)
-        self.name = 'trust_evaluator_v2_2'
+        self.name = 'trust_evaluator'
         #store a list of connected switches
         self.datapaths = {}         #TODO use only datapaths_stats to track alive switches
         # dict datapths statistics    

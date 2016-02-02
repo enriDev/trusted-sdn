@@ -89,7 +89,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.net = nx.DiGraph()          # graph topology
         self.dp_ref_dict = {}            # dpid -> datapath  
         self.cache_ip_mac = {}           # ip -> mac
-      
+         
     
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def setup_flowtable(self, ev):

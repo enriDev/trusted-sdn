@@ -405,6 +405,7 @@ class RandomRoutingPath(RoutingPathBase):
         return
         
         
+        
 class TrustedRoutingPath(RoutingPathBase):
     
     def __init__(self, network_graph=None):
@@ -414,7 +415,7 @@ class TrustedRoutingPath(RoutingPathBase):
       
         try:
             LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
-            path = nx.shortest_path(self.net, src, dst, 'weight')
+            path = nx.dijkstra_path(self.net, src, dst, 'weight')
             LOG.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
             return path
         

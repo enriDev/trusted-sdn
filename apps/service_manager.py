@@ -49,8 +49,9 @@ from security_class import SecurityClass
 
 
 
-# conf file path for services
-SERVICE_CFG_PATH = 'services_cfg.conf'
+
+SERVICE_CFG_PATH = 'services_cfg.conf'  # conf file path for services
+LOG = logging.getLogger(__name__)       # module logger
 
 
 class EventServiceDiscovered(event.EventBase):
@@ -107,11 +108,11 @@ class ServiceManager(app_manager.RyuApp):
                 service_ip = service_obj.ip
                 self.services_dict[service_ip] = service_obj
                 
-            self.logger.info("SERVICE_MGR: services loaded:")
-            self.logger.info(self.services_dict)
+            LOG.info("SERVICE_MGR: services loaded:")
+            LOG.info(self.services_dict)
             
         except ConfigParser.Error:
-            self.logger.info("SERVIE_MGR: error during conf services loading.")
+            LOG.info("SERVIE_MGR: error during conf services loading.")
             
             
     def get_service_from_mac(self, mac):
@@ -122,7 +123,7 @@ class ServiceManager(app_manager.RyuApp):
         return None
     
     
-    def set_routing_path(self, ip_dst, ip_src):
+    def set_routing_path_method(self, ip_dst, ip_src):
         
         service = None
         if ip_dst in self.services_dict.keys():
@@ -136,7 +137,7 @@ class ServiceManager(app_manager.RyuApp):
         
         # the service is or dst either src
         # evaluate security class
-        print 'DEBUG: asked routing path for: ', service.ip, ' sec clss: ', service.security_class
+        print 'SERVICE_MGR: flow with: ', service.ip, ' sec clss: ', service.security_class
         serv_sec_cl = service.security_class
         if SecurityClass[serv_sec_cl] <= self.TRUST_THRES_DEF:
             return tbs.TrustedRoutingPath()
@@ -231,7 +232,7 @@ class ServiceManager(app_manager.RyuApp):
             print "discovered services:",self.discovered_service, '-',service.ip
             if self.all_services_discovered():
                 self.stop_service_discovery()
-                self.logger.info("SERVICE_MGR: All services discovered.")
+                LOG.info("SERVICE_MGR: All services discovered.")
                 
         except sdp.InvalidServiceDiscoveryPacket:
             # this handler could handle other pkt type

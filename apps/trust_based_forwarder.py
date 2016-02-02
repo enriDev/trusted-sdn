@@ -42,7 +42,6 @@ from __builtin__ import True
 
 import networkx as nx
 
-
 import trust_event
 import of_tb_func as of_func
 import trust_evaluator
@@ -51,14 +50,10 @@ from service_manager import ServiceManager, ServiceDiscoveryPacket
 
 
 ######## Global parameter#######
-# cfg file path
-SERVICE_CFG_PATH = 'services_cfg.ini'
-# lowest priority
-TABLE_MISS_PRIORITY = 0
-# table id for miss priority
-TABLE_MISS_TB_ID = 0
+LOG = logging.getLogger(__name__)       # module logger
 
-
+TABLE_MISS_PRIORITY = 0                 # lowest priority
+TABLE_MISS_TB_ID = 0                    # table id for miss priority
 
 
 
@@ -114,7 +109,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     @set_ev_cls(event.EventSwitchEnter, MAIN_DISPATCHER)
     def _new_switch_event(self, ev):
              
-        self.logger.info('TOPO_EVENT: New switch detected %016x', ev.switch.dp.id)
+        LOG.info('TOPO_EVENT: New switch detected %016x', ev.switch.dp.id)
         
         # add switches
         switch_list = get_switch(self.topology_api_app, None)
@@ -136,13 +131,13 @@ class TrustBasedForwarder(app_manager.RyuApp):
     @set_ev_cls(event.EventSwitchLeave)
     def _switch_leave_event(self, ev):
         
-        self.logger.info('TOPO_EVENT: !!!! ALERT Switch leave %016x', ev.switch.dp.id)
+        LOG.info('TOPO_EVENT: !!!! ALERT Switch leave %016x', ev.switch.dp.id)
         #TODO handle the switch leave event
         
     @set_ev_cls(event.EventLinkAdd, MAIN_DISPATCHER)
     def _new_link_event(self, ev):
         
-        self.logger.info('TOPO_EVENT: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
+        LOG.info('TOPO_EVENT: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
         
         link_list = get_link(self.topology_api_app, None)
         links = [(link.src.dpid, link.dst.dpid, {'port':link.src.port_no, 'weight':self.DEF_EDGE_WEIGHT}) for link in link_list]
@@ -155,13 +150,13 @@ class TrustBasedForwarder(app_manager.RyuApp):
     @set_ev_cls(event.EventLinkDelete)
     def _link_delete_event(self,ev):
         
-        self.logger.info('TOPO_EVENT: !!!! ALERTLink deleted %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
+        LOG.info('TOPO_EVENT: !!!! ALERTLink deleted %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
     
     
     #set_ev_cls(service_manager.EventServiceDiscovered)
     def service_discovered_event(self, ev):
         
-        self.logger.info('TOPO_EVENT: New service detected: %s - %s', ev.service.name, ev.service.ip)
+        LOG.info('TOPO_EVENT: New service detected: %s - %s', ev.service.name, ev.service.ip)
         
         service = ev.service
         dpid = ev.dpid
@@ -190,20 +185,20 @@ class TrustBasedForwarder(app_manager.RyuApp):
         
         # check if host already in net graph
         if host_mac not in self.net:
-            self.logger.info('TOPO_EVENT: New host detected: %s - %s', ev.host.mac, ev.host.ipv4) 
+            LOG.info('TOPO_EVENT: New host detected: %s - %s', ev.host.mac, ev.host.ipv4) 
             self.net.add_node(host_mac)  
             self.net.add_edge(dpid, host_mac, {'port': dp_port})
             self.net.add_edge(host_mac, dpid)
             self.cache_ip_mac[host.ipv4[0]] = host_mac
-            print 'update arp table ', self.cache_ip_mac
-        
+            LOG.info('update ip-mac cache: %s', self.cache_ip_mac)
+                    
         
     #set_ev_cls(trust_event.EventSwitchTrustChange, MAIN_DISPATCHER)
     def _switch_trust_change_handler(self, ev):
         
         dpid = ev.dpid
         trust = ev.trust
-        self.logger.info("TRUST_EVENT: dp: %s - trust: %s%%", dpid, trust*100)    
+        LOG.info("TRUST_EVENT: dp: %s - trust: %s%%", dpid, trust*100)    
         
         
     @set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
@@ -211,7 +206,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         
         link = ev.link
         trust = ev.link_trust
-        #self.logger.info('TRUST_EVENT: Trust Metric update for link: %s -> %s - TM: %s%%', link.src.dpid, link.dst.dpid, trust*100)
+        #LOG.info('TRUST_EVENT: Trust Metric update for link: %s -> %s - TM: %s%%', link.src.dpid, link.dst.dpid, trust*100)
         
         # keep a minimun trust value for dijkstra algorithm
         if trust < self.DEF_EDGE_WEIGHT: 
@@ -230,14 +225,14 @@ class TrustBasedForwarder(app_manager.RyuApp):
             old_trust = self.net[src][dst]['weight']
             balanced_trust = self.get_balanced_trust_value(old_trust, new_trust)
             
-            self.logger.info('TOPO_EDGE_WEIGHT: updating trust metric: %s -> %s = %s', src, dst, balanced_trust)
+            LOG.info('TOPO_EDGE_WEIGHT: updating trust metric: %s -> %s = %s', src, dst, balanced_trust)
             self.net[src][dst]['weight'] = balanced_trust
             #print "TOPO_EDGE_TRUST_LIST: " 
             #for edge in self.net.edges(data=True): 
             #    print edge 
             
         except KeyError as e:
-            self.logger.info('TOPO_EDGE_WEIGHT: node not found: %016x ...', e.args[0])
+            LOG.info('TOPO_EDGE_WEIGHT: node not found: %016x ...', e.args[0])
         
         
     def get_balanced_trust_value (self, old_trust, new_trust):
@@ -277,7 +272,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         if src == BROADCAST_STR:
             return
         
-        #self.logger.info('\n'+'**PKT-IN: from dpid %s: %s \n',dpid, (pck,))
+        #LOG.info('\n'+'**PKT-IN: from dpid %s: %s \n',dpid, (pck,))
         
         ip_dst = ip_src = None
         
@@ -295,8 +290,8 @@ class TrustBasedForwarder(app_manager.RyuApp):
             ip_src = ipv4_pkt.src
         
         else:
-            self.logger.info("TRUST_FORWARDER: Unhandled case, ip not found:")
-            self.logger.info('\t'+'From dpid %s: %s \n',dpid, (pck,))
+            LOG.info("TRUST_FORWARDER: Unhandled case, ip not found:")
+            LOG.info('\t'+'From dpid %s: %s \n',dpid, (pck,))
             return
         
         routing_path = self.set_routing_path_method(ip_dst, ip_src)    
@@ -305,10 +300,10 @@ class TrustBasedForwarder(app_manager.RyuApp):
             # retrive the mac from ip
             dst = self.cache_ip_mac[ip_dst]
         except KeyError:
-            self.logger.info("TRUST_FORWARDER: ip->mac mapping error")
+            LOG.info("TRUST_FORWARDER: ip->mac mapping error")
             return 
         
-        self.logger.info("TRUST_FORWARDER: RoutingPath used: %s", routing_path.__class__.__name__)
+        LOG.info("TRUST_FORWARDER: RoutingPath used: %s", routing_path.__class__.__name__)
         path = routing_path.compute_routing_path(dpid, dst)
         self.install_routing_path(path, msg)
      
@@ -320,7 +315,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         
         try:
             # ask for routing_path object in case of msg directed to service
-            routing_path = srv_mgr_ref.set_routing_path(ip_dst, ip_src)
+            routing_path = srv_mgr_ref.set_routing_path_method(ip_dst, ip_src)
             routing_path.net = self.net
         except AttributeError:
             # this error is raised for None value @srv_mgr_ref
@@ -337,18 +332,18 @@ class TrustBasedForwarder(app_manager.RyuApp):
             @weight String. If "weight" trusted path is computed 
         """        
         try:
-            self.logger.info("PATH_SEARCH: Path %s --> %s",src, dst)
+            LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
             path = nx.shortest_path(self.net, src, dst, weight)
-            self.logger.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
+            LOG.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
             return path
         
         except nx.NetworkXNoPath:
             if dst not in self.net:
-                self.logger.info('NET_VIEW: Dst not found: %s', dst)
+                LOG.info('NET_VIEW: Dst not found: %s', dst)
             else:
-                self.logger.info('NET_VIEW: No path found: %s -> %s ', src, dst)
+                LOG.info('NET_VIEW: No path found: %s -> %s ', src, dst)
         except nx.NetworkXError as e:
-            self.logger.info('NET_VIEW: Node not found: %s', e.args)
+            LOG.info('NET_VIEW: Node not found: %s', e.args)
   
       
     def install_routing_path(self, path, msg):
@@ -418,18 +413,18 @@ class TrustedRoutingPath(RoutingPathBase):
     def compute_routing_path(self, src, dst):
       
         try:
-            self.logger.info("PATH_SEARCH: Path %s --> %s",src, dst)
+            LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
             path = nx.shortest_path(self.net, src, dst, 'weight')
-            self.logger.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
+            LOG.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
             return path
         
         except nx.NetworkXNoPath:
             if dst not in self.net:
-                self.logger.info('NET_VIEW: Dst not found: %s', dst)
+                LOG.info('NET_VIEW: Dst not found: %s', dst)
             else:
-                self.logger.info('NET_VIEW: No path found: %s -> %s ', src, dst)
+                LOG.info('NET_VIEW: No path found: %s -> %s ', src, dst)
         except nx.NetworkXError as e:
-            self.logger.info('NET_VIEW: Node not found: %s', e.args)
+            LOG.info('NET_VIEW: Node not found: %s', e.args)
 
 
 

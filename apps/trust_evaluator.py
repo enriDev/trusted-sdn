@@ -40,13 +40,10 @@ from ryu.lib.packet.ether_types import ETH_TYPE_LLDP
 
 ##### GLOBAL VARIABLE ####
 
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger(__name__)   # logger for module
 
-# lowest priority
-TABLE_MISS_PRIORITY = 0
-# table id for miss priority
-TABLE_MISS_TB_ID = 0
-
+TABLE_MISS_PRIORITY = 0             # lowest priority
+TABLE_MISS_TB_ID = 0                # table id for miss priority
 # misalignement between rx pkts and tabe-miss pkts due to the separate, non synchronized statistics requests 
 STAT_REQ_TIMING_THRESH = 5
 
@@ -126,7 +123,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
         #sw = app_manager.lookup_service_brick('switches')
         #sw.is_active = False
         
-        self.logger.info("TRUST_EVAL: Starting statistics requests...")
+        LOG.info("TRUST_EVAL: Starting statistics requests...")
         while True:
             for datapath in self.datapaths.values():
                 self._multi_stats_request(datapath)
@@ -146,7 +143,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
                 
                 self.datapaths[datapath.id] = datapath
                 self.datapaths_stats.setdefault(datapath.id, SwStatistic(datapath.id)) 
-                self.logger.info('Register datapath: %016x', datapath.id)
+                LOG.info('Register datapath: %016x', datapath.id)
                 
                 # install table-miss entry: drop
                 #priority = TABLE_MISS_PRIORITY
@@ -156,14 +153,14 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
                                           #ofproto.OFPCML_NO_BUFFER)] # changed
                 #actions = []
                 #self._add_flow(datapath, match, actions, priority, table_id)
-                #self.logger.info('Install table-miss entry to dp: %016x - action: drop', datapath.id)
+                #LOG.info('Install table-miss entry to dp: %016x - action: drop', datapath.id)
                 
                 
         elif ev.state == DEAD_DISPATCHER:
             if datapath.id in self.datapaths:
                 del self.datapaths[datapath.id]
                 del self.datapaths_stats[datapath.id]
-                self.logger.info('Unregister datapath: %016x', datapath.id)
+                LOG.info('Unregister datapath: %016x', datapath.id)
                 
     
     #def _add_flow (self, datapath, match, actions, priority = 0, table_id = 0):
@@ -182,7 +179,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
     @set_ev_cls(event.EventLinkAdd)
     def new_link_event_handler(self, ev):
         
-        self.logger.info('TRUST_EVAL: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
+        LOG.info('TRUST_EVAL: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
         
         self.link_list.setdefault( ev.link , )
         #print '***links'
@@ -192,7 +189,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
 
     def _multi_stats_request(self, datapath):
         
-        #self.logger.info('SWITCH_EVAL: Statistic request: dp %016x', datapath.id)
+        #LOG.info('SWITCH_EVAL: Statistic request: dp %016x', datapath.id)
         
         #self._lldp_match_stats_request(datapath)
         self._port_stats_request(datapath)    
@@ -200,7 +197,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
  
     def _lldp_match_stats_request(self, datapath):
         
-        #self.logger.info('Table-miss statistics request: dp %016x', datapath.id)
+        #LOG.info('Table-miss statistics request: dp %016x', datapath.id)
         
         ofproto = datapath.ofproto
         of_parser = datapath.ofproto_parser
@@ -214,7 +211,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
         
     def _port_stats_request(self, datapath):
         
-        #self.logger.info('SWITCH_EVAL: Port statistic request: dp %016x', datapath.id)
+        #LOG.info('SWITCH_EVAL: Port statistic request: dp %016x', datapath.id)
         
         ofproto = datapath.ofproto
         of_parser = datapath.ofproto_parser
@@ -236,7 +233,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
             lldp_match = 0
             for stat in body: lldp_match = stat.packet_count
             self.datapaths_stats[datapath.id].update_lldp_stat(lldp_match)
-            self.logger.info('TRUST_EVAL-EVENT: LLDP match for dp %016x : %d', datapath.id, lldp_match)
+            LOG.info('TRUST_EVAL-EVENT: LLDP match for dp %016x : %d', datapath.id, lldp_match)
 
       
     
@@ -247,7 +244,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
         datapath = msg.datapath
         body = msg.body
         
-        #self.logger.info('TRUST_EVAL-EVENT: port statistics for dp %016x', datapath.id)
+        #LOG.info('TRUST_EVAL-EVENT: port statistics for dp %016x', datapath.id)
         # TODO in case of EventSwitchLeave while a request is pending, the counter is
         #      never reset
         self.pending_stats_req -= 1
@@ -271,7 +268,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
         
         # compute drop rate for the switch
         sw_drop_rate, sw_fabr_rate = self.datapaths_stats[datapath.id].get_flow_conservation()
-        self.logger.info("DEBUG: Flow conservation property for dp %s: drop=%s%%  fabr=%s%%", datapath.id, sw_drop_rate*100, sw_fabr_rate*100)
+        LOG.info("DEBUG: Flow conservation property for dp %s: drop=%s%%  fabr=%s%%", datapath.id, sw_drop_rate*100, sw_fabr_rate*100)
         #self._log_port_statistics(msg, self.logger)    
               
         # raise event for switch drop rate

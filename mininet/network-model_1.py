@@ -36,10 +36,6 @@ class OVSBridgeSTP(OVSSwitch):
 switches = {'ovs-stp': OVSBridgeSTP}
 
 
-linkopts_2_4 = dict(bw=10, delay='0.1ms', loss=30, max_queue_size=1000, use_htb=True)
-linkopts_3_4 = dict(bw=10, delay='0.1ms', loss=20, max_queue_size=1000, use_htb=True)
-
-
 class NetModel_1_topo(Topo):
 	"""
 	Lab17 configuration
@@ -69,12 +65,14 @@ class NetModel_1_topo(Topo):
 		srv1 = self.addHost( 'srv1' )
 		srv2 = self.addHost( 'srv2' )
         
+		linkopts_2_4 = dict(bw=10, delay='0.1ms', loss=30, max_queue_size=1000, use_htb=True)
+		linkopts_3_4 = dict(bw=10, delay='0.1ms', loss=20, max_queue_size=1000, use_htb=True)
         
 		self.addLink( s1, h1 )
 		self.addLink( s1, h2 )
 		self.addLink( s1, s2 )
 		self.addLink( s1, s3 )
-		self.addLink( s2, s4)
+		self.addLink( s2, s4, **linkopts_2_4)
 		self.addLink( s2, s5 )
 		self.addLink( s3, s4 )
 		self.addLink( s3, s5 )

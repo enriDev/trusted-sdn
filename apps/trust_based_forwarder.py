@@ -49,6 +49,7 @@ import trust_evaluator
 from service_manager import ServiceManager, ServiceDiscoveryPacket
 
 
+
 ######## Global parameter#######
 # cfg file path
 SERVICE_CFG_PATH = 'services_cfg.ini'
@@ -88,7 +89,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.name = "TrustedBasedForwarder"
         #self.service_manager = kwargs['ServiceManager']
         
-        self.CONF.observe_links = True   #observe link option
+        self.CONF.observe_links = True   #observe link option !!Not working
         self.topology_api_app = self     # self reference for topology api
         self.net = nx.DiGraph()          # graph topology
         self.dp_ref_dict = {}            # dpid -> datapath  
@@ -298,17 +299,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
             self.logger.info('\t'+'From dpid %s: %s \n',dpid, (pck,))
             return
         
-        routing_path = RandomRoutingPath(self.net)
-        srv_mgr_ref = app_manager.lookup_service_brick('ServiceManager')
-          
-        try:
-            # ask for routing_path object in case of msg directed to service
-            routing_path = srv_mgr_ref.set_routing_path(ip_dst, ip_src)
-            routing_path.net = self.net
-            
-        except ServiceManager.ServiceNotFound:
-            # the dst ip is not a service: use non-trusted path
-            routing_path = RandomRoutingPath(self.net)           
+        routing_path = self.set_routing_path_method(ip_dst, ip_src)    
         
         try:
             # retrive the mac from ip
@@ -320,8 +311,27 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.logger.info("TRUST_FORWARDER: RoutingPath used: %s", routing_path.__class__.__name__)
         path = routing_path.compute_routing_path(dpid, dst)
         self.install_routing_path(path, msg)
-            
-          
+     
+     
+    def set_routing_path_method(self, ip_dst, ip_src):
+        
+        routing_path = RandomRoutingPath(self.net)
+        srv_mgr_ref = app_manager.lookup_service_brick('ServiceManager')
+        
+        try:
+            # ask for routing_path object in case of msg directed to service
+            routing_path = srv_mgr_ref.set_routing_path(ip_dst, ip_src)
+            routing_path.net = self.net
+        except AttributeError:
+            # this error is raised for None value @srv_mgr_ref
+            # ignore silently
+            pass
+        except ServiceManager.ServiceNotFound:
+            # the dst_ip or src_ip are not registered services: use non-trusted path
+            pass
+        return routing_path
+                    
+             
     def compute_routing_path(self, src, dst, weight = None):
         """ Return a list of nodes for the path
             @weight String. If "weight" trusted path is computed 

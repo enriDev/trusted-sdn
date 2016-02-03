@@ -14,6 +14,7 @@ import struct
 import ConfigParser
 import six
 import abc
+from random import randint
 
 from ryu.base import app_manager
 from ryu.controller import handler
@@ -71,7 +72,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     # The NEW_TRUST_VALUE_WEIGHT = (1 - OLD_TRUST_VALUE_WEIGHT)
     OLD_TRUST_VALUE_WEIGHT = 0.6
     # idle time out for new flow entries
-    IDLE_TIME_OUT = 25
+    IDLE_TIME_OUT = 20
 
     #_CONTEXTS = {
      #       'trust_evaluator_v2_2': trust_evaluator_v2_2.SwitchLinkTrustEvaluator
@@ -401,8 +402,25 @@ class RandomRoutingPath(RoutingPathBase):
         super(RandomRoutingPath, self).__init__(network_graph)
         
     def compute_routing_path(self, src, dst):
-        #TODO implement method
-        return
+        
+        try:
+            LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
+            
+            path_generator = nx.all_shortest_paths(self.net, src, dst, weight=None) 
+            path_list = [p for p in path_generator]
+            selected_path = randint( 0, len(path_list)-1 )
+            path = path_list[selected_path]
+            
+            LOG.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
+            return path
+        
+        except nx.NetworkXNoPath:
+            if dst not in self.net:
+                LOG.info('NET_VIEW: Dst not found: %s', dst)
+            else:
+                LOG.info('NET_VIEW: No path found: %s -> %s ', src, dst)
+        except nx.NetworkXError as e:
+            LOG.info('NET_VIEW: Node not found: %s', e.args)
         
         
         
@@ -415,7 +433,7 @@ class TrustedRoutingPath(RoutingPathBase):
       
         try:
             LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
-            path = nx.dijkstra_path(self.net, src, dst, 'weight')
+            path = nx.dijkstra_path(self.net, src, dst, weight='weight')
             LOG.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
             return path
         

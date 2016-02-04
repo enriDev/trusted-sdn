@@ -57,7 +57,6 @@ TABLE_MISS_PRIORITY = 0                 # lowest priority
 TABLE_MISS_TB_ID = 0                    # table id for miss priority
 
 
-
 class TrustBasedForwarder(app_manager.RyuApp):
     
     OFP_VERSION = [ofproto13.OFP_VERSION, ofproto10.OFP_VERSION]

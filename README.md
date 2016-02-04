@@ -1,10 +1,21 @@
 # trusted-sdn
 Project moved to github.
 
-Note: always add --observe-links option when running ryu
+Start controller command:
+ $ ryu-manager --observe-links trust_based_forwarder service_manager
 
-Recent added features:
-	- strategy pattern for routing path algorithm
-	- new routing path algorithm based on ECMP
-	- forwarding based on trusted service
+SDN apps features:
+	- Topology discovery/storing
+	- Routing
+	- Static services registration with security class
+	- Monitoring switches "trust":
+		-pkts drop
+		-pkts fabrication
+	- Monitoring link "trust":
+		-pkts drop
+	- Trust Metric computation
+	- Routing methods:
+		-ECMP-like
+		-based on Trust Metric
+	
 

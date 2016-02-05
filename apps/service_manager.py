@@ -5,42 +5,22 @@ Created on Jan 26, 2016
 '''
 
 
-import sys
 import logging
-import struct
 import ConfigParser
-
 from ryu.base import app_manager
-from ryu.controller import handler
-from ryu.controller import mac_to_port
-from ryu.controller import ofp_event
+
+from ryu.controller import ofp_event, event
 from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, DEAD_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3 as ofproto13
 from ryu.ofproto import ofproto_v1_3_parser as parser13
-from ryu.ofproto import ofproto_v1_0 as ofproto10
-from ryu.ofproto.ether import ETH_TYPE_LLDP, ETH_TYPE_ARP
-from ryu.lib.mac import haddr_to_bin, BROADCAST, BROADCAST_STR
-from ryu.lib.packet import packet
-from ryu.lib.packet import ethernet
-from ryu.lib.packet import ipv4
-from ryu.lib.packet import arp
-from ryu.lib import dpid
-from ryu.topology.api import get_switch, get_link, get_host
-from ryu.app.wsgi import ControllerBase
-from ryu.topology.event import EventSwitchEnter
-from ryu.lib import hub
+from ryu.ofproto.ether import ETH_TYPE_ARP
+from ryu.lib.mac import BROADCAST_STR
+from ryu.lib.packet import packet, ethernet, arp
 from ryu.lib.packet.arp import ARP_REQUEST, ARP_REPLY
+from ryu.topology.event import EventSwitchEnter
 from __builtin__ import True
-from ryu.ofproto.ofproto_v1_3 import OFP_NO_BUFFER
-from ryu.lib.dpid import str_to_dpid
-from ryu.controller import handler
-from ryu.controller import event
 from ryu.exception import RyuException
-
-
-import networkx as nx
-
 
 import trust_event
 import of_tb_func as of_func

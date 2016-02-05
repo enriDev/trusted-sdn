@@ -201,7 +201,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         LOG.info("TRUST_EVENT: dp: %s - trust: %s%%", dpid, trust*100)    
         
         
-    @set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
+    #set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
     def _link_trust_change_handler(self, ev):
         
         link = ev.link

@@ -23,6 +23,7 @@ from ryu.exception import RyuException
 
 from flow_table_db import FlowTableDb
 
+
 LOG = logging.getLogger(__name__)
 
 
@@ -33,9 +34,9 @@ class OFTblModProvider(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         
         super(OFTblModProvider, self).__init__(*args, **kwargs)
-        self.name = "OFTblModProvider"
+        self.name = "of_tbl_mod_provider"
         
-        self.flow_tbl_db = FlowTableDb()
+        self.flow_table_cache = FlowTableDb()
         
      
     @staticmethod   
@@ -44,6 +45,8 @@ class OFTblModProvider(app_manager.RyuApp):
         if not OFTblModProvider._instance:
             OFTblModProvider._instance = OFTblModProvider()
         return OFTblModProvider._instance
+    
+    
     
     
     def ofAddFlow(self, datapath, match, actions, priority=ofproto13.OFP_DEFAULT_PRIORITY, idle_timeout = 0, buffer_id=None):
@@ -65,7 +68,8 @@ class OFTblModProvider(app_manager.RyuApp):
                                     instructions=inst)
         datapath.send_msg(mod)
         # update flow table db
-        self.flow_tbl_db.insert_flow_entry(mod)
+        self.flow_table_cache.insert_dp(datapath.id)
+        self.flow_table_cache.insert_flow_entry(mod)
 
 
     def ofDelFlow(self, datapath, match, priority = ofproto13.OFP_DEFAULT_PRIORITY):

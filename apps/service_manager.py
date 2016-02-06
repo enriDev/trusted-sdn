@@ -23,7 +23,7 @@ from __builtin__ import True
 from ryu.exception import RyuException
 
 import trust_event
-import of_tb_func as of_func
+from ofp_table_mod import of_tbl_mod_provider as of_func
 import trust_based_forwarder as tbs
 from security_class import SecurityClass
 
@@ -68,6 +68,7 @@ class ServiceManager(app_manager.RyuApp):
         self.dp_dict = {}            # dpid -> datapath
         self.services_dict = {}      # service ip -> service obj
         self.discovered_service = 0  # counter for discovered services 
+        self.of_provider = of_func.OFTblModProvider()
         
         self.load_services_config()
 
@@ -125,7 +126,7 @@ class ServiceManager(app_manager.RyuApp):
             
         
     
-    @set_ev_cls(ofp_event.EventOFPStateChange, CONFIG_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPStateChange, MAIN_DISPATCHER)
     def set_flowtable(self, ev):
         
         datapath = ev.datapath
@@ -133,12 +134,12 @@ class ServiceManager(app_manager.RyuApp):
         # drop arp requests to avoid arp storm
         match_arp_req = parser13.OFPMatch(eth_type = ETH_TYPE_ARP, arp_op = ARP_REQUEST)
         actions_arp_req = []
-        of_func.ofAddFlow(datapath, match_arp_req, actions_arp_req)
+        self.of_provider.ofAddFlow(datapath, match_arp_req, actions_arp_req)
         
         # forward arp replies to the controller
         match_arp_rep = parser13.OFPMatch(eth_type = ETH_TYPE_ARP, arp_op = ARP_REPLY)
         actions_arp_rep = [parser13.OFPActionOutput(ofproto13.OFPP_CONTROLLER, ofproto13.OFPCML_NO_BUFFER)]
-        of_func.ofAddFlow(datapath, match_arp_rep, actions_arp_rep)
+        self.of_provider.ofAddFlow(datapath, match_arp_rep, actions_arp_rep)
 
     
     def setup_flowtable(self, datapath):
@@ -146,23 +147,23 @@ class ServiceManager(app_manager.RyuApp):
         # drop arp requests to avoid arp storm
         match_arp_req = parser13.OFPMatch(eth_type = ETH_TYPE_ARP, arp_op = ARP_REQUEST)
         actions_arp_req = []
-        of_func.ofAddFlow(datapath, match_arp_req, actions_arp_req)
+        self.of_provider.ofAddFlow(datapath, match_arp_req, actions_arp_req)
         
         # forward arp replies to the controller
         match_arp_rep = parser13.OFPMatch(eth_type = ETH_TYPE_ARP, arp_op = ARP_REPLY)
         actions_arp_rep = [parser13.OFPActionOutput(ofproto13.OFPP_CONTROLLER, ofproto13.OFPCML_NO_BUFFER)]
-        of_func.ofAddFlow(datapath, match_arp_rep, actions_arp_rep)
+        self.of_provider.ofAddFlow(datapath, match_arp_rep, actions_arp_rep)
     
     
     def reset_flowtable(self, datapath):
         
         # drop arp requests to avoid arp storm
         match_arp_req = parser13.OFPMatch(eth_type = ETH_TYPE_ARP, arp_op = ARP_REQUEST)
-        of_func.ofDelFlow(datapath, match_arp_req)
+        self.of_provider.ofDelFlow(datapath, match_arp_req)
         
         # forward arp replies to the controller
         match_arp_rep = parser13.OFPMatch(eth_type = ETH_TYPE_ARP, arp_op = ARP_REPLY)
-        of_func.ofDelFlow(datapath, match_arp_rep)
+        self.of_provider.ofDelFlow(datapath, match_arp_rep)
     
         
     @set_ev_cls(EventSwitchEnter, MAIN_DISPATCHER)
@@ -180,7 +181,7 @@ class ServiceManager(app_manager.RyuApp):
             
             discovery_pkt = ServiceDiscoveryPacket.build_from_service(service)
             for i in range(0, self.NUM_PROB_PKT):
-                of_func.ofSendPck(datapath, discovery_pkt, ofproto13.OFPP_FLOOD)
+                self.of_provider.ofSendPck(datapath, discovery_pkt, ofproto13.OFPP_FLOOD)
                 
     
                 

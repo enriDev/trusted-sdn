@@ -46,7 +46,7 @@ import networkx as nx
 import trust_event
 import of_tb_func as of_func
 import trust_evaluator
-from service_manager import ServiceManager, ServiceDiscoveryPacket
+#from service_manager import ServiceManager, ServiceDiscoveryPacket
 
 
 

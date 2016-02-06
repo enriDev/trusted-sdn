@@ -4,13 +4,13 @@ CREATE TABLE datapath(
 	PRIMARY KEY(dpid)
 );
 CREATE TABLE flowtable(
-	id 				INTEGER NOT NULL,
+	id 				INTEGER,
 	dpid 			INTEGER NOT NULL,
 	priority 		INTEGER NOT NULL,
 	tbl_id 			INTEGER NOT NULL,
 	idle_timeout	INTEGER NOT NULL,
 	match 			TEXT NOT NULL,
 	instruction		TEXT NOT NULL,
-	PRIMARY KEY(id, dpid),
+	PRIMARY KEY(dpid, match),
 	FOREIGN KEY(dpid) REFERENCES datapath(dpid)
 );

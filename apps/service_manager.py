@@ -125,10 +125,10 @@ class ServiceManager(app_manager.RyuApp):
             
         
     
-    @set_ev_cls(ofp_event.EventOFPStateChange, MAIN_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def set_flowtable(self, ev):
         
-        datapath = ev.datapath
+        datapath = ev.msg.datapath
         
         # drop arp requests to avoid arp storm
         match_arp_req = parser13.OFPMatch(eth_type = ETH_TYPE_ARP, arp_op = ARP_REQUEST)

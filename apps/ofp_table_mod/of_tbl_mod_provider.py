@@ -35,14 +35,14 @@ class OFTblModProvider(app_manager.RyuApp):
         
         super(OFTblModProvider, self).__init__(*args, **kwargs)
         self.name = "of_tbl_mod_provider"
-        
         self.flow_table_cache = FlowTableDb()
+        OFTblModProvider._instance = self
         
      
     @staticmethod   
-    def get_instance(self):
+    def get_instance():
         
-        if not OFTblModProvider._instance:
+        if OFTblModProvider._instance is None:
             OFTblModProvider._instance = OFTblModProvider()
         return OFTblModProvider._instance
     
@@ -68,7 +68,6 @@ class OFTblModProvider(app_manager.RyuApp):
                                     instructions=inst)
         datapath.send_msg(mod)
         # update flow table db
-        self.flow_table_cache.insert_dp(datapath.id)
         self.flow_table_cache.insert_flow_entry(mod)
 
 

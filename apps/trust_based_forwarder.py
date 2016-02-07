@@ -33,6 +33,7 @@ from ryu.lib.packet import ethernet
 from ryu.lib.packet import icmp
 from ryu.lib.packet import ipv4
 from ryu.lib.packet import arp
+from ryu.lib.packet import lldp
 from ryu.lib import dpid
 from ryu.topology.api import get_switch, get_link, get_host
 from ryu.app.wsgi import ControllerBase
@@ -44,16 +45,16 @@ from __builtin__ import True
 import networkx as nx
 
 import trust_event
-import of_tb_func as of_func
+from ofp_table_mod.of_tbl_mod_provider import OFTblModProvider
 import trust_evaluator
-#from service_manager import ServiceManager, ServiceDiscoveryPacket
+from service_manager import ServiceManager, ServiceDiscoveryPacket
 
 
 
 ######## Global parameter#######
 LOG = logging.getLogger(__name__)       # module logger
 
-TABLE_MISS_PRIORITY = 0                 # lowest priority
+
 TABLE_MISS_TB_ID = 0                    # table id for miss priority
 
 
@@ -64,6 +65,9 @@ class TrustBasedForwarder(app_manager.RyuApp):
     #_CONTEXTS = {
     #        'ServiceManager': ServiceManager
     #    }
+    
+    TABLE_MISS_PRIORITY = 0           # lowest priority
+    LLDP_PRIORITY = 0xFFFF  
     
     # defualt weight for the shortest path first algorithm
     DEF_EDGE_WEIGHT = 0.01
@@ -89,6 +93,8 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.net = nx.DiGraph()          # graph topology
         self.dp_ref_dict = {}            # dpid -> datapath  
         self.cache_ip_mac = {}           # ip -> mac
+        
+        self.of_provider = OFTblModProvider()
       
     
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -99,11 +105,22 @@ class TrustBasedForwarder(app_manager.RyuApp):
         parser = datapath.ofproto_parser
         
         # install table-miss flow entry
-        # NO BUFFER option set
+        # BUFFER option set so that the pkt are 
+        # buffered on switch
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)]   #TODO set buffer on the switched
-        priority = TABLE_MISS_PRIORITY
-        of_func.ofAddFlow(datapath, match, actions, priority)
+        priority = TrustBasedForwarder.TABLE_MISS_PRIORITY
+        self.of_provider.ofAddFlow(datapath, match, actions, priority)
+        
+        # install lldp packet flow entry
+        # OFPCML_NO_BUFFER is set so that the LLDP is not
+        # buffered on switch
+        match = parser.OFPMatch(
+                            eth_type=ETH_TYPE_LLDP,
+                            eth_dst=lldp.LLDP_MAC_NEAREST_BRIDGE)
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)]
+        priority = TrustBasedForwarder.LLDP_PRIORITY
+        self.of_provider.ofAddFlow(datapath, match, actions, priority, ofproto.OFPCML_NO_BUFFER)
     
     
     @set_ev_cls(event.EventSwitchEnter, MAIN_DISPATCHER)
@@ -201,7 +218,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         LOG.info("TRUST_EVENT: dp: %s - trust: %s%%", dpid, trust*100)    
         
         
-    #set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
+    @set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
     def _link_trust_change_handler(self, ev):
         
         link = ev.link
@@ -369,7 +386,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
                 datapath = self.dp_ref_dict.get(node)
                 
                 actions = [parser13.OFPActionOutput(out_port)]
-                of_func.ofAddFlow(datapath = datapath, match = match,
+                self.of_provider.ofAddFlow(datapath = datapath, match = match,
                         actions = actions, idle_timeout = self.IDLE_TIME_OUT, buffer_id = msg.buffer_id)
         
         

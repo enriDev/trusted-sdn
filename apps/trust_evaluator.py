@@ -32,7 +32,6 @@ from ryu.lib.packet import packet, ethernet, vlan
 
 
 import trust_event
-import of_tb_func
 from ryu.lib.mac import BROADCAST_STR
 from ryu.lib.packet.lldp import LLDP_MAC_NEAREST_BRIDGE
 from ryu.lib.packet.ether_types import ETH_TYPE_LLDP

@@ -6,12 +6,12 @@ CREATE TABLE session(
 );
 CREATE TABLE flowtable(
 	dpid 			INTEGER NOT NULL,
-	priority 		INTEGER NOT NULL,
 	tbl_id 			INTEGER NOT NULL,
+	priority 		INTEGER NOT NULL,
 	idle_timeout	INTEGER NOT NULL,
 	match 			TEXT NOT NULL,
 	instruction		TEXT NOT NULL,
 	session_id		INTEGER NOT NULL,
-	PRIMARY KEY(dpid, match),
+	PRIMARY KEY(dpid, match, session_id),
 	FOREIGN KEY(session_id) REFERENCES session(session_id)
 );

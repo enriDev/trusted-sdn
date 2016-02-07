@@ -30,26 +30,15 @@ LOG = logging.getLogger(__name__)
 
 
 class OFTblModProvider(app_manager.RyuApp):
-    __metaclass__ = Singleton
+    
+    __metaclass__ = Singleton   #singleton class
      
      
     def __init__(self, *args, **kwargs):
         
         super(OFTblModProvider, self).__init__(*args, **kwargs)
         self.name = "of_tbl_mod_provider"
-        self.flow_table_cache = FlowTableDb()
-        
-        
-     
-    @staticmethod   
-    def getInstance():
-        
-        if OFTblModProvider.__instance is None:
-            print "debug instance is none"
-            OFTblModProvider.__instance = OFTblModProvider()
-        return OFTblModProvider.__instance
-    
-    
+        self.flow_table_cache = FlowTableDb()   
     
     
     def ofAddFlow(self, datapath, match, actions, priority=ofproto13.OFP_DEFAULT_PRIORITY, idle_timeout = 0, buffer_id=None):

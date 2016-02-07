@@ -121,7 +121,7 @@ class FlowTableDb():
             cursor = self.conn.cursor()
             cursor.executemany( 'INSERT INTO flowtable VALUES (?,?,?,?,?,?,?)', records)
             self.conn.commit()
-            LOG.info("FLOW_CACHE: insert flow: %s", ofp_flow_mod)
+            #LOG.info("FLOW_CACHE: insert flow: %s", ofp_flow_mod)
             
         except lite.IntegrityError as ex:
             LOG.info(ex)

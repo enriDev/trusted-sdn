@@ -40,7 +40,7 @@ class OFTblModProvider(app_manager.RyuApp):
         
      
     @staticmethod   
-    def get_instance():
+    def getInstance():
         
         if OFTblModProvider._instance is None:
             OFTblModProvider._instance = OFTblModProvider()

@@ -91,7 +91,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.cache_ip_mac = {}           # ip -> mac
       
     
-    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, MAIN_DISPATCHER)
     def setup_flowtable(self, ev):
         
         datapath = ev.msg.datapath

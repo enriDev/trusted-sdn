@@ -69,7 +69,7 @@ class ServiceManager(app_manager.RyuApp):
     
     
     TIMEOUT = 10            # time interval between discovery probing
-    NUM_PROB_PKT = 2        # nr probing pkts sent for services discovery
+    NUM_PROB_PKT = 1        # nr probing pkts sent for services discovery
     PROB_SEND_GUARD = 0.5   # interval for avoiding burst
     TRUST_THRES_DEF = 1     # define which security class must use trusted routing
     
@@ -145,7 +145,7 @@ class ServiceManager(app_manager.RyuApp):
             
         
     
-    @set_ev_cls(ofp_event.EventOFPStateChange, CONFIG_DISPATCHER)
+    @set_ev_cls(ofp_event.EventOFPStateChange, MAIN_DISPATCHER)
     def set_flowtable(self, ev):
         
         datapath = ev.datapath

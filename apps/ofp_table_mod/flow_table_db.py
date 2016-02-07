@@ -9,6 +9,7 @@ import logging
 import datetime
 from os.path import isfile, getsize
 import sqlite3 as lite
+from singleton import Singleton
 from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, DEAD_DISPATCHER
 from ryu.lib.dpid import dpid_to_str
 
@@ -19,6 +20,7 @@ LOG = logging.getLogger(__name__)
 
 
 class FlowTableDb():
+    __metaclass__ = Singleton
     
     #TODO fix the relative paths
     DB_SCHEMA_SQL_PATH = 'ofp_table_mod/ofp_table.sql'

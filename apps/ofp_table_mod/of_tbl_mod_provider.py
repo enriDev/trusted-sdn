@@ -7,6 +7,7 @@ Created on Feb 5, 2016
 import logging
 import ConfigParser
 from ryu.base import app_manager
+from singleton import Singleton, Singleton2
 
 from ryu.controller import ofp_event, event
 from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, DEAD_DISPATCHER
@@ -27,24 +28,26 @@ from flow_table_db import FlowTableDb
 LOG = logging.getLogger(__name__)
 
 
-class OFTblModProvider(app_manager.RyuApp):
 
-    _instance = None    #singleton
+class OFTblModProvider(app_manager.RyuApp):
+    __metaclass__ = Singleton
+     
      
     def __init__(self, *args, **kwargs):
         
         super(OFTblModProvider, self).__init__(*args, **kwargs)
         self.name = "of_tbl_mod_provider"
         self.flow_table_cache = FlowTableDb()
-        OFTblModProvider._instance = self
+        
         
      
     @staticmethod   
     def getInstance():
         
-        if OFTblModProvider._instance is None:
-            OFTblModProvider._instance = OFTblModProvider()
-        return OFTblModProvider._instance
+        if OFTblModProvider.__instance is None:
+            print "debug instance is none"
+            OFTblModProvider.__instance = OFTblModProvider()
+        return OFTblModProvider.__instance
     
     
     

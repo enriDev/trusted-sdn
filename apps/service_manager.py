@@ -68,7 +68,7 @@ class ServiceManager(app_manager.RyuApp):
         self.dp_dict = {}            # dpid -> datapath
         self.services_dict = {}      # service ip -> service obj
         self.discovered_service = 0  # counter for discovered services 
-        self.of_provider = of_func.OFTblModProvider.get_instance()
+        self.of_provider = of_func.OFTblModProvider.getInstance()
         
         self.load_services_config()
 

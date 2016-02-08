@@ -143,7 +143,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
                 
                 self.datapaths[datapath.id] = datapath
                 self.datapaths_stats.setdefault(datapath.id, SwStatistic(datapath.id)) 
-                LOG.info('Register datapath: %016x', datapath.id)
+                #LOG.info('Register datapath: %016x', datapath.id)
                 
                 # install table-miss entry: drop
                 #priority = TABLE_MISS_PRIORITY
@@ -179,7 +179,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
     @set_ev_cls(event.EventLinkAdd)
     def new_link_event_handler(self, ev):
         
-        LOG.info('TRUST_EVAL: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
+        #LOG.info('TRUST_EVAL: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
         
         self.link_list.setdefault( ev.link , )
         #print '***links'

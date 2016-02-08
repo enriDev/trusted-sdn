@@ -108,6 +108,7 @@ class FlowTableDb():
         match_str = str(ofp_flow_mod.match)
         instr_str = str(ofp_flow_mod.instructions)
         
+        attributes.append( None )
         attributes.append( ofp_flow_mod.datapath.id )
         attributes.append( ofp_flow_mod.table_id )
         attributes.append( ofp_flow_mod.priority )
@@ -120,7 +121,7 @@ class FlowTableDb():
         
         try:
             cursor = self.conn.cursor()
-            cursor.executemany( 'INSERT INTO flowtable VALUES (?,?,?,?,?,?,?)', records)
+            cursor.executemany( 'INSERT INTO flowtable VALUES (?,?,?,?,?,?,?,?)', records)
             self.conn.commit()
             #LOG.info("FLOW_CACHE: insert flow: %s", ofp_flow_mod)
             

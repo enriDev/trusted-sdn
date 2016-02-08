@@ -75,7 +75,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     # The NEW_TRUST_VALUE_WEIGHT = (1 - OLD_TRUST_VALUE_WEIGHT)
     OLD_TRUST_VALUE_WEIGHT = 0.6
     # idle time out for new flow entries
-    IDLE_TIME_OUT = 20
+    IDLE_TIME_OUT = 0
 
     #_CONTEXTS = {
      #       'trust_evaluator_v2_2': trust_evaluator_v2_2.SwitchLinkTrustEvaluator

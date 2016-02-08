@@ -24,7 +24,8 @@ class FlowTableDb():
     
     #TODO fix the relative paths
     DB_SCHEMA_SQL_PATH = 'ofp_table_mod/ofp_table.sql'
-    DB_PATH = "ofp_table_mod/flow_table_cache"                    
+    DB_PATH = "ofp_table_mod/flow_table_cache"
+    #DB_PATH = ":memory:"                    
     
     
     class FlowTableDbError(Exception):

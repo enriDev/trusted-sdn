@@ -72,7 +72,7 @@ class NetModel_1_topo(Topo):
 		self.addLink( s1, h2 )
 		self.addLink( s1, s2 )
 		self.addLink( s1, s3 )
-		self.addLink( s2, s4 )
+		self.addLink( s2, s4, **linkopts_2_4)
 		self.addLink( s2, s5 )
 		self.addLink( s3, s4 )
 		self.addLink( s3, s5 )
@@ -94,17 +94,25 @@ def run_net_model_1():
 	net = Mininet (**netopts)
 	net.start()
 	
-	srv1 = net.getNodeByName("srv1")    
+	srv1 = net.getNodeByName("srv1")
+	srv2 = net.getNodeByName("srv2")    
 	
 	print "***Starting UDP Server..."
 	srv1.cmd('iperf --single_udp -s -u &')
+	srv2.cmd('iperf --single_udp -s -u &')
+    
 	srv1_udp_pid = int( srv1.cmd('echo $!') )
+	srv2_udp_pid = int( srv2.cmd('echo $!') )
 	print "UDP Server started on srv1 with PID ", srv1_udp_pid
+	print "UDP Server started on srv2 with PID ", srv2_udp_pid
     
 	print "***Starting TCP Server..."
 	srv1.cmd('iperf -s  &')
+	srv2.cmd('iperf -s  &')
 	srv1_tcp_pid = int(srv1.cmd('echo $!'))
+	srv2_tcp_pid = int(srv2.cmd('echo $!'))
 	print "TCP Server started on srv1 with PID ", srv1_tcp_pid
+	print "TCP Server started on srv2 with PID ", srv2_tcp_pid
     
 	print "Running CLI..."
 	CLI(net)

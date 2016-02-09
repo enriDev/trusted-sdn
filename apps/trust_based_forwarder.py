@@ -48,54 +48,62 @@ import trust_event
 from ofp_table_mod.of_tbl_mod_provider import OFTblModProvider
 import trust_evaluator
 from service_manager import ServiceManager, ServiceDiscoveryPacket
+from metric_providers.metric_provider import get_links_metric
+from metric_providers.trust_metric_provider import TrustMetricProvider
+from ryu.base.app_manager import require_app
 
 
 
-######## Global parameter#######
 LOG = logging.getLogger(__name__)       # module logger
 
 
-TABLE_MISS_TB_ID = 0                    # table id for miss priority
+# required apps for TrustBasedForwarder 
+# TODO integrate as a additional option in ryu manager
+app_manager.require_app('metric_providers.trust_metric_provider')
+
+
 
 
 class TrustBasedForwarder(app_manager.RyuApp):
     
     OFP_VERSION = [ofproto13.OFP_VERSION, ofproto10.OFP_VERSION]
     
-    #_CONTEXTS = {
-    #        'ServiceManager': ServiceManager
-    #    }
+    TABLE_MISS_PRIORITY = 0         # lowest priority
+    LLDP_PRIORITY = 0xFFFF          # priority for lldp flow entry  
+    IDLE_TIME_OUT = 0               # idle time out for new flow entries
+    DEF_EDGE_WEIGHT = 0.01          # default link weight
     
-    TABLE_MISS_PRIORITY = 0           # lowest priority
-    LLDP_PRIORITY = 0xFFFF  
-    
-    # defualt weight for the shortest path first algorithm
-    DEF_EDGE_WEIGHT = 0.01
     # weight used to balance a new trust update
     # The NEW_TRUST_VALUE_WEIGHT = (1 - OLD_TRUST_VALUE_WEIGHT)
     OLD_TRUST_VALUE_WEIGHT = 0.6
-    # idle time out for new flow entries
-    IDLE_TIME_OUT = 0
+    METRIC_UPDATE_INTER = 5         # interval between metric update
 
-    #_CONTEXTS = {
-     #       'trust_evaluator_v2_2': trust_evaluator_v2_2.SwitchLinkTrustEvaluator
-      #  }
-    #_EVENTS = [trust_event.EventSwitchTrustChange, trust_event.EventLinkTrustChange]
 
     def __init__(self, *args, **kwargs):
         
         super(TrustBasedForwarder, self).__init__(*args, **kwargs)
         self.name = "TrustedBasedForwarder"
-        #self.service_manager = kwargs['ServiceManager']
-        
-        self.CONF.observe_links = True   #observe link option !!Not working
-        self.topology_api_app = self     # self reference for topology api
-        self.net = nx.DiGraph()          # graph topology
-        self.dp_ref_dict = {}            # dpid -> datapath  
-        self.cache_ip_mac = {}           # ip -> mac
+        self.CONF.observe_links = True      #observe link option !!Not working
+        self.topology_api_app = self        # self reference for topology api
+        self.net = nx.DiGraph()             # graph topology
+        self.dp_ref_dict = {}               # dpid -> datapath  
+        self.cache_ip_mac = {}              # ip -> mac
         
         self.of_provider = OFTblModProvider()
-      
+        
+        #trial for metric request
+        self.threads.append( hub.spawn_after(self.METRIC_UPDATE_INTER, self.metric_update_loop) )
+        
+        
+    def metric_update_loop(self):
+        
+        LOG.info('TRUST_FORWARDER: Starting metric update loop (%s interval)...', 
+                 self.METRIC_UPDATE_INTER)
+        while True:
+            links_metric = get_links_metric(self, TrustMetricProvider.APP_NAME)
+            print 'metric update: ', links_metric
+            hub.sleep(self.METRIC_UPDATE_INTER)
+
     
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def setup_flowtable(self, ev):
@@ -218,7 +226,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         LOG.info("TRUST_EVENT: dp: %s - trust: %s%%", dpid, trust*100)    
         
         
-    @set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
+    #set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
     def _link_trust_change_handler(self, ev):
         
         link = ev.link

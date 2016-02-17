@@ -1,10 +1,14 @@
 '''
 Created on Jan 26, 2016
 
+@todo: 
+    -consider modifying the loading of services
+    -if errors or empty config the ryu app should be aborted 
+
 @author: root
 '''
 
-
+import os
 import logging
 import ConfigParser
 from ryu.base import app_manager
@@ -28,10 +32,10 @@ import trust_based_forwarder as tbs
 from security_class import SecurityClass
 
 
+MODULE_PATH = os.path.dirname( os.path.abspath(__file__) )  # module path
 
-
-SERVICE_CFG_PATH = 'services_cfg.conf'  # conf file path for services
-LOG = logging.getLogger(__name__)       # module logger
+SERVICE_CFG_PATH = MODULE_PATH + '/services_cfg.conf'        # conf file path for services
+LOG = logging.getLogger(__name__)                           # module logger
 
 
 class EventServiceDiscovered(event.EventBase):
@@ -53,11 +57,19 @@ class ServiceManager(app_manager.RyuApp):
     PROB_SEND_GUARD = 0.5   # interval for avoiding burst
     TRUST_THRES_DEF = 1     # define which security class must use trusted routing
     
+    # represent ServiceManager status
+    _STATUS = dict( [("ERROR",-1), 
+                    ("LOADING",0), 
+                    ("LOADED",1)] )
     
+    # events raised by the ryu app
     _EVENTS = [EventServiceDiscovered]
     
     class ServiceNotFound(RyuException):
         message = '%(msg)s'
+        
+    class ServiceConfigError(RyuException):
+        pass
         
         
     def __init__(self, *args, **kwargs):
@@ -65,19 +77,21 @@ class ServiceManager(app_manager.RyuApp):
         super(ServiceManager, self).__init__(*args, **kwargs)
         self.name = "ServiceManager"
         
-        self.dp_dict = {}            # dpid -> datapath
-        self.services_dict = {}      # service ip -> service obj
-        self.discovered_service = 0  # counter for discovered services 
-        self.of_provider = of_func.OFTblModProvider()
-        self.load_services_config()
-
+        self.status = ServiceManager._STATUS['LOADING']            # Service manager status
+        self.dp_dict = {}                               # dpid -> datapath
+        self.services_dict = {}                         # service ip -> service obj
+        self.discovered_service = 0                     # counter for discovered services 
+        self.of_provider = of_func.OFTblModProvider()   # of modification provider
+        self.load_services_config()           
+        
 
     def load_services_config(self):
          
         self.config = ConfigParser.ConfigParser()
-        self.config.read(SERVICE_CFG_PATH) 
-
-        try:       
+         
+        try: 
+            with open(SERVICE_CFG_PATH) as f:    
+                self.config.readfp(f)     
             services = self.config.sections()
             for service in services:
                 params = self.config.options(service)
@@ -90,9 +104,16 @@ class ServiceManager(app_manager.RyuApp):
                 
             LOG.info("SERVICE_MGR: services loaded:")
             LOG.info(self.services_dict)
-            
+        
         except ConfigParser.Error:
-            LOG.info("SERVIE_MGR: error during conf services loading.")
+            LOG.info("SERVICE_MGR_ERROR: error during services config loading.")
+            self.status = ServiceManager._STATUS['ERROR']
+            #raise self.ServiceConfigError("SERVIE_MGR: error during conf services loading.")
+            
+        except IOError:
+            LOG.info("SERVICE_MGR_ERROR: %s not found.", SERVICE_CFG_PATH)
+            self.status = ServiceManager._STATUS['ERROR']
+            #raise self.ServiceConfigError("SERVIE_MGR: %s not found." % SERVICE_CFG_PATH)
             
             
     def get_service_from_mac(self, mac):
@@ -127,6 +148,9 @@ class ServiceManager(app_manager.RyuApp):
     
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def set_flowtable(self, ev):
+        
+        if self.status == ServiceManager._STATUS['ERROR']:
+            return
         
         datapath = ev.msg.datapath
         

@@ -38,16 +38,22 @@ from os.path import isfile, getsize
 import sqlite3 as lite
 from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, DEAD_DISPATCHER
 from ryu.lib.dpid import dpid_to_str
-
-import trust_event
 from ryu.lib.mac import BROADCAST_STR
 from ryu.lib.packet.lldp import LLDP_MAC_NEAREST_BRIDGE
 from ryu.lib.packet.ether_types import ETH_TYPE_LLDP
+
+import trust_event
 import metric_provider
+from malicious_fl_tbl_mod import EventMaliciousFlowTblMod
 
 
 
 LOG = logging.getLogger(__name__)   # logger for module
+
+
+# required trust collectors
+app_manager.require_app('metric_providers.malicious_fl_tbl_mod')    # malicious flow table mod
+app_manager.require_app('apps.trust_evaluator')
 
 
 
@@ -58,13 +64,27 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
     
     def __init__(self, *args, **kwargs):
         super(TrustMetricProvider, self).__init__(self.APP_NAME, *args, **kwargs)
+    
+    
+    
+    @set_ev_cls(EventMaliciousFlowTblMod)
+    def malicious_flow_tbl_mod_hanlder(self, ev):
+        
+        dpid = ev.dpid
+        LOG.info('****mal update received%s', dpid)
+      
+      
+      
+    @set_ev_cls(trust_event.EventLinkTrustChange)  
+    def link_update(self, ev):
+        pass
         
         
     def compute_metric(self):
         for link_dict in self.links_metric:
             link_dict['metric'] = TrustMetricProvider.DEFAULT_METRIC 
         
-
+    
       
         
         

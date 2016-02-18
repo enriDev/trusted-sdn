@@ -17,7 +17,7 @@ from ryu.controller.handler import set_ev_cls
 from ryu.controller.handler import MAIN_DISPATCHER
 from ryu.lib import hub
 
-
+from trust_metric_provider import TrustMetricProvider
 from trust_collector_base import TrustCollectorBase, EventTrustUpdate
 from ofp_table_mod.of_tbl_mod_provider import OFTblModProvider  
 # require add apps to PYTHONPATH
@@ -29,9 +29,19 @@ LOG = logging.getLogger(__name__)
 
 
 
+
+class EventMaliciousFlowTblMod(EventTrustUpdate):
+    
+    def __init__(self, dpid):
+        super(EventMaliciousFlowTblMod, self).__init__()
+        self.dpid = dpid
+
+
+
 class MaliciousFlTblMod(TrustCollectorBase):
     
     FLOW_TBL_REQUEST_INTERVAL = 10
+    
     
     def __init__(self):
         
@@ -56,7 +66,6 @@ class MaliciousFlTblMod(TrustCollectorBase):
             for datapath in self.switch_list.values():
                 self.flow_tbl_status_request(datapath)
             hub.sleep(self.FLOW_TBL_REQUEST_INTERVAL)
-            #TODO query the flow tables
 
 
     def flow_tbl_status_request(self, datapath):
@@ -100,6 +109,15 @@ class MaliciousFlTblMod(TrustCollectorBase):
             # the flow entry was not present in the cached
             LOG.info('\nMALICIOUS_MOD: Found flow table inconsistency in dp %s :\n'
                      '%s', dpid, flow_table[e.args[0]])
+            
+            #print '***observers:', self.observers
+            trust_update = EventMaliciousFlowTblMod(dpid)
+            
+            #TODO use send_event_to_observers:
+            #    - why doesn't it register observers??
+            self.send_event(TrustMetricProvider.APP_NAME, trust_update) 
+
+            #self.publish_trust_update(event)
         
         
         

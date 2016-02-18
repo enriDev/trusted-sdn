@@ -10,35 +10,27 @@ import sys
 import os
 import inspect
 
-from ryu.topology import event
+from ryu.topology import event as topoevent
 from ryu.topology.api import get_switch
 from ryu.controller import ofp_event
+from ryu.controller import event
 from ryu.controller.handler import set_ev_cls
 from ryu.controller.handler import MAIN_DISPATCHER
 from ryu.lib import hub
 
-from trust_metric_provider import TrustMetricProvider
-from trust_collector_base import TrustCollectorBase, EventTrustUpdate
+import trustevents
+from trust_collector_base import TrustCollectorBase
 from ofp_table_mod.of_tbl_mod_provider import OFTblModProvider  
 # require add apps to PYTHONPATH
 #TODO find better solution for imports
 
 
-
 LOG = logging.getLogger(__name__)
 
 
-
-
-class EventMaliciousFlowTblMod(EventTrustUpdate):
-    
-    def __init__(self, dpid):
-        super(EventMaliciousFlowTblMod, self).__init__()
-        self.dpid = dpid
-
-
-
 class MaliciousFlTblMod(TrustCollectorBase):
+    
+    _EVENTS = [trustevents.EventMaliciousFlowTblMod]
     
     FLOW_TBL_REQUEST_INTERVAL = 10
     
@@ -52,7 +44,7 @@ class MaliciousFlTblMod(TrustCollectorBase):
         self.threads.append( hub.spawn_after(self.LOAD_TIME, self.flow_tbl_monitoring_loop) )
         
     
-    @set_ev_cls(event.EventSwitchEnter, MAIN_DISPATCHER)
+    @set_ev_cls(topoevent.EventSwitchEnter, MAIN_DISPATCHER)
     def switchEnterEvent_handler(self, ev):
         
         datapath = ev.switch.dp
@@ -110,15 +102,8 @@ class MaliciousFlTblMod(TrustCollectorBase):
             LOG.info('\nMALICIOUS_MOD: Found flow table inconsistency in dp %s :\n'
                      '%s', dpid, flow_table[e.args[0]])
             
-            #print '***observers:', self.observers
-            trust_update = EventMaliciousFlowTblMod(dpid)
-            
-            #TODO use send_event_to_observers:
-            #    - why doesn't it register observers??
-            self.send_event(TrustMetricProvider.APP_NAME, trust_update) 
-
-            #self.publish_trust_update(event)
-        
+            trust_update = trustevents.EventMaliciousFlowTblMod(dpid)
+            self.publish_trust_update(trust_update)
         
         
     def get_cached_hashed_fl_tbl(self, dpid):

@@ -1,13 +1,12 @@
 '''
-Created on Dec 7, 2015
-
+Created on Feb 18, 2016
 The module monitors switches and links in a network, evaluates the trust
 according to some parameters and raise events for publishing the trust evaluation:
 
 - Switch trust :
     - dropping / fabrication rate
 
-@version: 1.0
+@version: 2.0
 @author: root
 '''
 
@@ -29,13 +28,12 @@ from ryu.topology import event, switches
 from ryu.topology.switches import LLDPCounter
 from ryu.ofproto import ether
 from ryu.lib.packet import packet, ethernet, vlan
-
-
-import trust_event
 from ryu.lib.mac import BROADCAST_STR
 from ryu.lib.packet.lldp import LLDP_MAC_NEAREST_BRIDGE
 from ryu.lib.packet.ether_types import ETH_TYPE_LLDP
 
+import trustevents
+from trust_collector_base import TrustCollectorBase
 
 ##### GLOBAL VARIABLE ####
 
@@ -50,7 +48,7 @@ STAT_REQ_TIMING_THRESH = 5
     
     
         
-class SwitchLinkTrustEvaluator(app_manager.RyuApp):
+class DropFabrRateCollector(TrustCollectorBase):
     """ Monitor switches port statistics to evaluate:
         - switch drop rate
         - switch fabrication rate
@@ -75,13 +73,13 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
     SW_TO_CONTR_PORT = 4294967294
     
     # events raised by the app
-    _EVENTS = [trust_event.EventSwitchTrustChange, trust_event.EventLinkTrustChange]
+    _EVENTS = [trustevents.EventDropFabrRate]
     
     
     def __init__(self, *args, **kwargs):
         
-        super(SwitchLinkTrustEvaluator, self).__init__(*args, **kwargs)
-        self.name = 'trust_evaluator'
+        super(DropFabrRateCollector, self).__init__(*args, **kwargs)
+        self.name = 'drop_fabr_rate_collector'
         #store a list of connected switches
         self.datapaths = {}         #TODO use only datapaths_stats to track alive switches
         # dict datapths statistics    
@@ -271,7 +269,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
         #self._log_port_statistics(msg, self.logger)    
               
         # raise event for switch drop rate
-        #trust_ev = trust_event.EventSwitchTrustChange(datapath.id, sw_drop_rate)
+        #trust_ev = trustevents.EventSwitchTrustChange(datapath.id, sw_drop_rate)
         if not self.is_first_stat_req:
             # self.send_event_to_observers(trust_ev)
             # compute drop rate for all links if no requests are pending
@@ -323,7 +321,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
             
             assert (trust_metric >= 0)
             
-            trust_ev = trust_event.EventLinkTrustChange(link, trust_metric)
+            trust_ev = trustevents.EventDropFabrRate(link, trust_metric)
             self.send_event_to_observers(trust_ev)       
         
         
@@ -459,11 +457,11 @@ class SwStatistic(object):
         #      are too few
         #    - the retrived rx and tx values are error prone, therefore we must consider
         #      a margin error
-        if (rx - tx) > SwitchLinkTrustEvaluator.STABILIZATION_PARAM :      # pkts dropping 
+        if (rx - tx) > DropFabrRateCollector.STABILIZATION_PARAM :      # pkts dropping 
             drop_rate = (rx - tx) / rx 
             drop_rate = round(drop_rate, 4)
             
-        elif (tx - rx) > SwitchLinkTrustEvaluator.STABILIZATION_PARAM :    # pkts fabrication
+        elif (tx - rx) > DropFabrRateCollector.STABILIZATION_PARAM :    # pkts fabrication
             fabr_rate = (tx - rx) / tx
             fabr_rate = round(fabr_rate, 4)
             
@@ -473,8 +471,3 @@ class SwStatistic(object):
         self.fabrication_rate = fabr_rate
             
         return drop_rate, fabr_rate
- 
-             
-        
-        
-        

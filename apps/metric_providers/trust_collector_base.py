@@ -17,17 +17,6 @@ from ryu.controller.handler import MAIN_DISPATCHER
 LOG = logging.getLogger(__name__)
 
 
-
-### EVENTS ###
-
-class EventTrustUpdate(event.EventBase):
-    
-    def __init__(self):       
-        super(EventTrustUpdate, self).__init__()
-        
-
-
-
 ### TRUST MONITOR BASE CLASS ###
 
 class TrustCollectorBase(app_manager.RyuApp):
@@ -47,7 +36,7 @@ class TrustCollectorBase(app_manager.RyuApp):
     
     def publish_trust_update(self, trust_update):
         
-        assert(trust_update is EventTrustUpdate)
+        #assert(trust_update is EventTrustUpdate)
         self.send_event_to_observers(trust_update, MAIN_DISPATCHER)
 
 

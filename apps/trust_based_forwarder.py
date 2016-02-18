@@ -27,7 +27,7 @@ from ryu.ofproto import ofproto_v1_3 as ofproto13
 from ryu.ofproto import ofproto_v1_3_parser as parser13
 from ryu.ofproto import ofproto_v1_0 as ofproto10
 from ryu.ofproto.ether import ETH_TYPE_LLDP, ETH_TYPE_ARP, ETH_TYPE_IP
-from ryu.lib.mac import haddr_to_bin, BROADCAST, BROADCAST_STR
+from ryu.lib.mac import BROADCAST_STR
 from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import icmp
@@ -44,14 +44,12 @@ from __builtin__ import True
 
 import networkx as nx
 
-import trust_event
+from metric_providers import trustevents
 from ofp_table_mod.of_tbl_mod_provider import OFTblModProvider
-import trust_evaluator
 from service_manager import ServiceManager, ServiceDiscoveryPacket
 from metric_providers.metric_provider import get_links_metric
 from metric_providers.trust_metric_provider import TrustMetricProvider
-from ryu.base.app_manager import require_app
-
+from gi.overrides import deprecated
 
 
 LOG = logging.getLogger(__name__)       # module logger
@@ -82,7 +80,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         
         super(TrustBasedForwarder, self).__init__(*args, **kwargs)
-        self.name = "TrustedBasedForwarder"
+        self.name = "trusted_based_forwarder"
         self.CONF.observe_links = True      #observe link option !!Not working
         self.topology_api_app = self        # self reference for topology api
         self.net = nx.DiGraph()             # graph topology
@@ -92,8 +90,8 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.of_provider = OFTblModProvider()
         
         #trial for metric request
-        self.threads.append( hub.spawn_after(self.METRIC_UPDATE_INTER, self.metric_update_loop) )
-        
+        #self.threads.append( hub.spawn_after(self.METRIC_UPDATE_INTER, self.metric_update_loop) )
+    
         
     def metric_update_loop(self):
         
@@ -216,16 +214,9 @@ class TrustBasedForwarder(app_manager.RyuApp):
             self.net.add_edge(host_mac, dpid)
             self.cache_ip_mac[host.ipv4[0]] = host_mac
             LOG.info('update ip-mac cache: %s', self.cache_ip_mac)
-                    
+                
         
-    #set_ev_cls(trust_event.EventSwitchTrustChange, MAIN_DISPATCHER)
-    def _switch_trust_change_handler(self, ev):
-        
-        dpid = ev.dpid
-        trust = ev.trust
-        LOG.info("TRUST_EVENT: dp: %s - trust: %s%%", dpid, trust*100)    
-        
-        
+    @deprecated
     #set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
     def _link_trust_change_handler(self, ev):
         

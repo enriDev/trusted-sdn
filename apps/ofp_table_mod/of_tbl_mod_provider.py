@@ -48,8 +48,11 @@ class OFTblModProvider(app_manager.RyuApp):
         
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
-    
-        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+        
+        inst = []
+        if actions: # if drop actions
+            inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+        
         if buffer_id:
             mod = parser.OFPFlowMod(datapath=datapath, buffer_id=buffer_id,
                                     priority=priority, idle_timeout=idle_timeout, 

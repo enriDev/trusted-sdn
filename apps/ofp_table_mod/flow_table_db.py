@@ -1,32 +1,39 @@
 '''
 Created on Feb 5, 2016
 
+@todo: 
+        -edit exception handling
+        -edit real or ram db parameter
+
 @author: root
 
 '''
 
+import os
 import logging
+import inspect
 import datetime
 from os.path import isfile, getsize
 import sqlite3 as lite
 from singleton import Singleton
 from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, DEAD_DISPATCHER
 from ryu.lib.dpid import dpid_to_str
-
+  
 
 
 LOG = logging.getLogger(__name__)
 
+MODULE_PATH = os.path.dirname( os.path.abspath(__file__) ) 
+
 
 
 class FlowTableDb():
+    
     __metaclass__ = Singleton
     
-    #TODO fix the relative paths
-    DB_SCHEMA_SQL_PATH = 'ofp_table_mod/ofp_table.sql'
-    DB_PATH = "ofp_table_mod/flow_table_cache"
+    DB_SCHEMA_SQL_PATH = MODULE_PATH + '/ofp_table.sql'
+    DB_PATH = MODULE_PATH + "/flow_table_cache"
     #DB_PATH = ":memory:"                    
-    
     
     class FlowTableDbError(Exception):
         pass
@@ -35,7 +42,7 @@ class FlowTableDb():
     def __init__(self, db_name = ":memory:"):
         self.db_name = FlowTableDb.DB_PATH
         self.conn = self.open_db()
-        self.create_session()
+        self.session_id = self.create_session()
         LOG.info("FLOW_CACHE: Database created succesfully: %s", self.db_name)
         
         
@@ -88,6 +95,7 @@ class FlowTableDb():
         cur = self.conn.cursor()
         cur.execute("INSERT INTO session VALUES (?,?,?)", record)
         self.conn.commit()    
+        return self.get_session_id()
         
         
     def get_session_id(self):
@@ -102,7 +110,6 @@ class FlowTableDb():
         
         #print '***INSERT FLOW: ', ofp_flow_mod
         attributes = []
-        session_id = self.get_session_id()
         
         # the following object are stored as string (sqlite TEXT) 
         match_str = str(ofp_flow_mod.match)
@@ -115,7 +122,7 @@ class FlowTableDb():
         attributes.append( ofp_flow_mod.idle_timeout )
         attributes.append( match_str )
         attributes.append( instr_str )
-        attributes.append( session_id )
+        attributes.append( self.session_id )
         record = tuple(attributes)
         records = [record]
         
@@ -129,9 +136,28 @@ class FlowTableDb():
             LOG.info(ex)
         except lite.Error as ex:
             raise FlowTableDb.FlowTableDbError(
-                        "%s - %s" % (type(ex),ex) )
+                        "{} - {}".format( type(ex),ex ) )
         
         
+    def flow_table_query(self, dpid):
+        ''' query flow table entry 
+        @dpid    datapath id
+        return   list of tuple that represent flow entries
+        '''
+        try:
+            cur = self.conn.cursor()
+        
+            session = (self.session_id, )
+            datapathid = (dpid, )
+            query_param = [(self.session_id), (dpid)]
+            cur.execute("SELECT tbl_id, priority, idle_timeout, match, instruction "
+                    "FROM flowtable " 
+                    "WHERE session_id=? and dpid=?", query_param)
+            return cur.fetchall()
+        
+        except lite.Error as ex:
+            raise FlowTableDb.FlowTableDbError(
+                        "{} - {}".format(type(ex), ex) )
     
     
             

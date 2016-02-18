@@ -86,7 +86,7 @@ class MetricProviderBase(app_manager.RyuApp):
     @set_ev_cls(event.EventLinkAdd)
     def new_link_event_handler(self, ev):
         
-        LOG.info('METRIC_PROVIDER: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
+        #LOG.info('METRIC_PROVIDER: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
         link = ev.link
         link_dict = { 'src':link.src.dpid, 'dst':link.dst.dpid, 'metric':1 }
         self.links_metric.append(link_dict)

@@ -126,9 +126,9 @@ class TrustBasedForwarder(app_manager.RyuApp):
         match = parser.OFPMatch(
                             eth_type=ETH_TYPE_LLDP,
                             eth_dst=lldp.LLDP_MAC_NEAREST_BRIDGE)
-        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)]
+        actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER, ofproto.OFPCML_NO_BUFFER)]
         priority = TrustBasedForwarder.LLDP_PRIORITY
-        self.of_provider.ofAddFlow(datapath, match, actions, priority, ofproto.OFPCML_NO_BUFFER)
+        self.of_provider.ofAddFlow(datapath, match, actions, priority, buffer_id=ofproto.OFPCML_NO_BUFFER)
     
     
     @set_ev_cls(event.EventSwitchEnter, MAIN_DISPATCHER)

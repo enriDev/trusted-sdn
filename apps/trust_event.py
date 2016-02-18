@@ -44,4 +44,4 @@ class EventLinkTrustChange(event.EventBase):
         
 
 # register the app that raise the above events
-handler.register_service('trust_evaluator')
+#handler.register_service('trust_evaluator')

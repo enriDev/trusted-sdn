@@ -8,7 +8,6 @@ of trust_collector_base
 '''
 
 from ryu.controller import event
-from ryu.lib.dpid import DPID_PATTERN
 
 
 
@@ -17,7 +16,6 @@ class EventTrustUpdate(event.EventBase):
     def __init__(self):       
         super(EventTrustUpdate, self).__init__()
         
-
 
 class EventMaliciousFlowTblMod(EventTrustUpdate):
     

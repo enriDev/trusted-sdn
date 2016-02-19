@@ -74,7 +74,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     # weight used to balance a new trust update
     # The NEW_TRUST_VALUE_WEIGHT = (1 - OLD_TRUST_VALUE_WEIGHT)
     OLD_TRUST_VALUE_WEIGHT = 0.6
-    METRIC_UPDATE_INTER = 5         # interval between metric update
+    METRIC_UPDATE_INTER = 5        # interval between metric update
 
 
     def __init__(self, *args, **kwargs):
@@ -90,7 +90,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.of_provider = OFTblModProvider()
         
         #trial for metric request
-        #self.threads.append( hub.spawn_after(self.METRIC_UPDATE_INTER, self.metric_update_loop) )
+        self.threads.append( hub.spawn_after(self.METRIC_UPDATE_INTER, self.metric_update_loop) )
     
         
     def metric_update_loop(self):
@@ -99,7 +99,10 @@ class TrustBasedForwarder(app_manager.RyuApp):
                  self.METRIC_UPDATE_INTER)
         while True:
             links_metric = get_links_metric(self, TrustMetricProvider.APP_NAME)
-            print 'metric update: ', links_metric
+            print 'metric update: '
+            for lk in links_metric.keys():
+                print lk.src.dpid,' -> ', lk.dst.dpid, ' : ', links_metric[lk]
+                
             hub.sleep(self.METRIC_UPDATE_INTER)
 
     
@@ -216,7 +219,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
             LOG.info('update ip-mac cache: %s', self.cache_ip_mac)
                 
         
-    @deprecated
+    #deprecated
     #set_ev_cls(trust_event.EventLinkTrustChange, MAIN_DISPATCHER)
     def _link_trust_change_handler(self, ev):
         

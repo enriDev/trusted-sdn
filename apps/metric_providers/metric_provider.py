@@ -77,10 +77,13 @@ class EventMetricRequest(app_event.EventRequestBase):
 class MetricProviderBase(app_manager.RyuApp):
     """Abstract class representing a metric provider. """
     
-    def __init__(self, name, *args, **kwargs):
+    
+    def __init__(self, name, default_link_weight, *args, **kwargs):
+        
         super(MetricProviderBase, self).__init__(*args, **kwargs)
         self.name = name
-        self.links_metric = {}
+        self.default_link_weight = default_link_weight
+        self.links_metric = {}      # link -> metric
         
         
     @set_ev_cls(event.EventLinkAdd)
@@ -88,18 +91,17 @@ class MetricProviderBase(app_manager.RyuApp):
         
         #LOG.info('METRIC_PROVIDER: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
         link = ev.link
-        link_dict = { 'src':link.src.dpid, 'dst':link.dst.dpid, 'metric':1 }
-        self.links_metric.append(link_dict)
+        self.links_metric[link] = self.default_link_weight
         
 
     @set_ev_cls(EventMetricRequest)
     def metric_request_handler(self, request):
         
-        print 'Received metric request from ', request.src
+        #print 'Received metric request from ', request.src
         self.compute_metric()
         reply = EventMetricReply(request.src, self.links_metric)
         self.reply_to_request(request, reply)
-        print 'sent metric reply to:', request.src
+        #print 'sent metric reply to:', request.src
     
     #abstractmethod
     def compute_metric(self):

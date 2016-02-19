@@ -73,7 +73,7 @@ class DropFabrRateCollector(TrustCollectorBase):
     SW_TO_CONTR_PORT = 4294967294
     
     # events raised by the app
-    _EVENTS = [trustevents.EventDropFabrRate]
+    _EVENTS = [trustevents.EventLinkDropRateUpdate, trustevents.EventFabrRateUpdate]
     
     
     def __init__(self, *args, **kwargs):

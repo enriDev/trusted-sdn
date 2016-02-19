@@ -80,7 +80,7 @@ class MetricProviderBase(app_manager.RyuApp):
     def __init__(self, name, *args, **kwargs):
         super(MetricProviderBase, self).__init__(*args, **kwargs)
         self.name = name
-        self.links_metric = []
+        self.links_metric = {}
         
         
     @set_ev_cls(event.EventLinkAdd)

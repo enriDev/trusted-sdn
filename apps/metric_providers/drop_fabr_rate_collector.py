@@ -310,23 +310,33 @@ class DropFabrRateCollector(TrustCollectorBase):
                 # if no packets has been sent or received ignore zero division 
                 pass
             
+            #TODO renaming
+            
             # drop rate of destination switch
             dst_sw_drp_rate = dst_sw_statistic.drop_rate 
+            
+            # link drop rate
             combined_drop_rate = self.get_combined_drop_rate(dst_sw_drp_rate, link_drp_rate)
+            
+            # switch fabrication rate
             dst_sw_fabr_rate = dst_sw_statistic.fabrication_rate
         
             #print "DEBUG trust metric for dp: ", dst.dpid," comb drop= ", combined_drop_rate," fabr= ",dst_sw_fabr_rate
             
-            trust_metric = self.get_trust_metric(combined_drop_rate, dst_sw_fabr_rate)
             
-            assert (trust_metric >= 0)
+            #trust_metric = self.get_trust_metric(combined_drop_rate, dst_sw_fabr_rate)
+            #assert (trust_metric >= 0)
+            #trust_ev = trustevents.EventDropFabrRate(link, trust_metric)
+            #self.send_event_to_observers(trust_ev)
             
-            trust_ev = trustevents.EventDropFabrRate(link, trust_metric)
-            self.send_event_to_observers(trust_ev)       
+            event_droprate = trustevents.EventLinkDropRateUpdate(link, combined_drop_rate)
+            event_fabrrate = trustevents.EventFabrRateUpdate(link.dst.dpid, dst_sw_fabr_rate) 
+            self.send_event_to_observers(event_droprate)
+            self.send_event_to_observers(event_fabrrate)      
         
         
     def get_combined_drop_rate(self, sw_drop, link_drop):      
-        # the following computation return the probability of the pkt drop
+        # the following computation return the probability of the pkt drop for a link
         
         drop_rate = sw_drop + link_drop - (sw_drop * link_drop)
         

@@ -55,7 +55,7 @@ def get_links_metric(app, provider_name):
 
 
 
-### EVENTS ###
+### SYNC EVENTS ###
 
 class EventMetricReply(app_event.EventReplyBase):
     

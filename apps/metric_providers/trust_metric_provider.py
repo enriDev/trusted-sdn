@@ -69,7 +69,14 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         
         dpid = ev.dpid
         LOG.info('****mal update received%s', dpid)
-      
+        #TODO think of how to store the collected trust and how to merge
+        
+        
+    @set_ev_cls(trustevents.EventDropFabrRate)
+    def drop_fabr_rate_handler(self, ev):
+        #TODO implement
+        pass
+        
         
     def compute_metric(self):
         for link_dict in self.links_metric:

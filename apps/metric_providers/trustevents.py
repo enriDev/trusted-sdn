@@ -1,12 +1,12 @@
 '''
 Created on Feb 18, 2016
 
+Contains all trust related events collected by subclasses
+of trust_collector_base
+
 @author: root
 '''
 
-
-from ryu.base import app_manager
-from ryu.controller import handler
 from ryu.controller import event
 
 
@@ -26,7 +26,6 @@ class EventMaliciousFlowTblMod(EventTrustUpdate):
         
 
 class EventDropFabrRate(EventTrustUpdate):
-    """ Define a change on the trust level of a link between switches"""
     
     def __init__(self, link, link_trust):
         

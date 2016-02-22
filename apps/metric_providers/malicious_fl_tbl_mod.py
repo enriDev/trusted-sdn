@@ -53,7 +53,7 @@ class MaliciousFlTblMod(TrustCollectorBase):
     
     def flow_tbl_monitoring_loop(self):
         
-        LOG.info("TRUST_EVAL: Starting flow table monitoring...")
+        LOG.info("MALICIOUS-MOD: Starting flow table monitoring...")
         while True:
             for datapath in self.switch_list.values():
                 self.flow_tbl_status_request(datapath)
@@ -62,7 +62,7 @@ class MaliciousFlTblMod(TrustCollectorBase):
 
     def flow_tbl_status_request(self, datapath):
         
-        LOG.info('Flow table status request: dp %016x', datapath.id)
+        #LOG.info('Flow table status request: dp %016x', datapath.id)
         
         ofproto = datapath.ofproto
         of_parser = datapath.ofproto_parser
@@ -99,7 +99,7 @@ class MaliciousFlTblMod(TrustCollectorBase):
         except KeyError as e:
             # if the hash key is not found in the cached_flow_table dict,
             # the flow entry was not present in the cached
-            LOG.info('\nMALICIOUS_MOD: Found flow table inconsistency in dp %s :\n'
+            LOG.info('\nMALICIOUS-MOD: Found flow table inconsistency in dp %s :\n'
                      '%s', dpid, flow_table[e.args[0]])
             
             trust_update = trustevents.EventMaliciousFlowTblMod(dpid)

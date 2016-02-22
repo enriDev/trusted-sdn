@@ -95,7 +95,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
         
     def metric_update_loop(self):
         
-        LOG.info('TRUST_FORWARDER: Starting metric update loop (%s interval)...', 
+        LOG.info('TRUST_FORWARDER: Starting metric update loop (%ss interval)...', 
                  self.METRIC_UPDATE_INTER)
         while True:
             links_metric = get_links_metric(self, TrustMetricProvider.APP_NAME)

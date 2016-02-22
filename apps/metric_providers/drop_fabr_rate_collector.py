@@ -91,7 +91,7 @@ class DropFabrRateCollector(TrustCollectorBase):
         # bool to check if first statistic request
         self.is_first_stat_req = True
         
-        self.threads.append( hub.spawn_after(self.INIT_TIME, self._stats_request_loop) )
+        self.threads.append( hub.spawn_after(self.LOAD_TIME, self._stats_request_loop) )
         
         
 
@@ -120,7 +120,7 @@ class DropFabrRateCollector(TrustCollectorBase):
         #sw = app_manager.lookup_service_brick('switches')
         #sw.is_active = False
         
-        LOG.info("TRUST_EVAL: Starting statistics requests...")
+        LOG.info("DROP-FABR-RATE: Starting statistics requests...")
         while True:
             for datapath in self.datapaths.values():
                 self._multi_stats_request(datapath)
@@ -176,7 +176,7 @@ class DropFabrRateCollector(TrustCollectorBase):
     @set_ev_cls(event.EventLinkAdd)
     def new_link_event_handler(self, ev):
         
-        LOG.info('TRUST_EVAL: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
+        LOG.info('DROP-FABR-RATE: New link detected %s -> %s', ev.link.src.dpid, ev.link.dst.dpid)
         
         self.link_list.setdefault( ev.link , )
         #print '***links'
@@ -265,7 +265,7 @@ class DropFabrRateCollector(TrustCollectorBase):
         
         # compute drop rate for the switch
         sw_drop_rate, sw_fabr_rate = self.datapaths_stats[datapath.id].get_flow_conservation()
-        LOG.info("DEBUG: Flow conservation property for dp %s: drop=%s%%  fabr=%s%%", datapath.id, sw_drop_rate*100, sw_fabr_rate*100)
+        LOG.info("DROP-FABR-RATE: Flow conservation property for dp %s: drop=%s%%  fabr=%s%%", datapath.id, sw_drop_rate*100, sw_fabr_rate*100)
         #self._log_port_statistics(msg, self.logger)    
               
         # raise event for switch drop rate

@@ -101,16 +101,16 @@ def run_net_model_1():
 	srv1.cmd('iperf --single_udp -s -u &')
 	srv2.cmd('iperf --single_udp -s -u &')
     
-	srv1_udp_pid = int( srv1.cmd('echo $!') )
-	srv2_udp_pid = int( srv2.cmd('echo $!') )
+	srv1_udp_pid = srv1.cmd('echo $!')
+	srv2_udp_pid = srv2.cmd('echo $!')
 	print "UDP Server started on srv1 with PID ", srv1_udp_pid
 	print "UDP Server started on srv2 with PID ", srv2_udp_pid
     
 	print "***Starting TCP Server..."
 	srv1.cmd('iperf -s  &')
 	srv2.cmd('iperf -s  &')
-	srv1_tcp_pid = int(srv1.cmd('echo $!'))
-	srv2_tcp_pid = int(srv2.cmd('echo $!'))
+	srv1_tcp_pid = srv1.cmd('echo $!')
+	srv2_tcp_pid = srv2.cmd('echo $!')
 	print "TCP Server started on srv1 with PID ", srv1_tcp_pid
 	print "TCP Server started on srv2 with PID ", srv2_tcp_pid
     

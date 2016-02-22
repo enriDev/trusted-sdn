@@ -122,14 +122,15 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
                     
                 actual_metric = self.exp_smoothing(self.DROP_WEIGHT, drop_rate, 
                                                     self.FABR_WEIGHT, fabr_rate)
-                actual_metric = round(actual_metric, 4)
+                #actual_metric = round(actual_metric, 4)
                     
                 current_metric = self.links_metric[link]
                 smoothed_metric = self.exp_smoothing(self.CURRENT_METRIC_WEIGHT, current_metric,
                                                     self.NEW_METRIC_WEIGHT, actual_metric)
+                smoothed_metric = round(smoothed_metric, 2)
                 
-                if smoothed_metric < self.DEFAULT_TRUST_METRIC:
-                    smoothed_metric = self.DEFAULT_TRUST_METRIC
+                #if smoothed_metric < self.DEFAULT_TRUST_METRIC:
+                 #   smoothed_metric = self.DEFAULT_TRUST_METRIC
                 
                 self.links_metric[link] = smoothed_metric
                 

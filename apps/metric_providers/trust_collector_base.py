@@ -32,7 +32,7 @@ class TrustCollectorBase(app_manager.RyuApp):
     def __init_(self, app_name):
         super(TrustCollectorBase, self).__init__()
         self.name = app_name
-
+        
     
     def publish_trust_update(self, trust_update):
         

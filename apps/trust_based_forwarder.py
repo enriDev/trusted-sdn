@@ -68,7 +68,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     
     TABLE_MISS_PRIORITY = 0         # lowest priority
     LLDP_PRIORITY = 0xFFFF          # priority for lldp flow entry  
-    IDLE_TIME_OUT = 0               # idle time out for new flow entries
+    IDLE_TIME_OUT = 15              # idle time out for new flow entries
     DEF_EDGE_WEIGHT = 0.01          # default link weight
     
     # weight used to balance a new trust update
@@ -92,18 +92,6 @@ class TrustBasedForwarder(app_manager.RyuApp):
         #trial for metric request
         self.threads.append( hub.spawn_after(self.METRIC_UPDATE_INTER, self.metric_update_loop) )
     
-        
-    def metric_update_loop(self):
-        
-        LOG.info('TRUST_FORWARDER: Starting metric update loop (%ss interval)...', 
-                 self.METRIC_UPDATE_INTER)
-        while True:
-            links_metric = get_links_metric(self, TrustMetricProvider.APP_NAME)
-            print 'metric update: '
-            for lk in links_metric.keys():
-                print lk.src.dpid,' -> ', lk.dst.dpid, ' : ', links_metric[lk]
-                
-            hub.sleep(self.METRIC_UPDATE_INTER)
 
     
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
@@ -234,31 +222,35 @@ class TrustBasedForwarder(app_manager.RyuApp):
         self.update_link_trust (link, trust)
         
     
-    def update_link_trust(self, link, new_trust):
+    def metric_update_loop(self):
+        
+        LOG.info('TRUST_FORWARDER: Starting metric update loop (%ss interval)...', 
+                 self.METRIC_UPDATE_INTER)
+        
+        while True:
+            links_metric = get_links_metric(self, TrustMetricProvider.APP_NAME)
+            print 'metric update: '
+            for lk in links_metric.keys():
+                print lk.src.dpid,' -> ', lk.dst.dpid, ' : ', links_metric[lk]
+                self.update_link_trust(lk, links_metric[lk])
+                
+            hub.sleep(self.METRIC_UPDATE_INTER)
+    
+    
+    def update_link_trust(self, link, metric_value):
         """ Allow to edit the edges weight of the graph"""
         
         src = link.src.dpid
         dst = link.dst.dpid
 
         try:
-            old_trust = self.net[src][dst]['weight']
-            balanced_trust = self.get_balanced_trust_value(old_trust, new_trust)
-            
-            LOG.info('TOPO_EDGE_WEIGHT: updating trust metric: %s -> %s = %s', src, dst, balanced_trust)
-            self.net[src][dst]['weight'] = balanced_trust
-            #print "TOPO_EDGE_TRUST_LIST: " 
-            #for edge in self.net.edges(data=True): 
-            #    print edge 
+            #cur_val = self.net[src][dst]['weight']
+
+            #LOG.info('TOPO_EDGE_WEIGHT: updating trust metric: %s -> %s = %s', src, dst, metric_value)
+            self.net[src][dst]['weight'] = metric_value
             
         except KeyError as e:
             LOG.info('TOPO_EDGE_WEIGHT: node not found: %016x ...', e.args[0])
-        
-        
-    def get_balanced_trust_value (self, old_trust, new_trust):
-        
-        balanced_trust = self.OLD_TRUST_VALUE_WEIGHT*old_trust + (1 - self.OLD_TRUST_VALUE_WEIGHT)*new_trust
-        balanced_trust = round(balanced_trust, 4)
-        return balanced_trust
    
        
     #

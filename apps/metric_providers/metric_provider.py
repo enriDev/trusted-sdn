@@ -61,7 +61,7 @@ class EventMetricReply(app_event.EventReplyBase):
     
     def __init__(self, dst_app, links_metric):
         super(EventMetricReply, self).__init__(dst_app)
-        self.links_metric = links_metric    # list: [{src:dpid, dst:dpid, metric:val}]
+        self.links_metric = links_metric    # dict: link -> metric
 
 
 class EventMetricRequest(app_event.EventRequestBase):

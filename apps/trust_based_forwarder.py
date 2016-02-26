@@ -74,7 +74,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     # weight used to balance a new trust update
     # The NEW_TRUST_VALUE_WEIGHT = (1 - OLD_TRUST_VALUE_WEIGHT)
     OLD_TRUST_VALUE_WEIGHT = 0.6
-    METRIC_UPDATE_INTER = 5        # interval between metric update
+    METRIC_UPDATE_INTER = 7        # interval between metric update
 
 
     def __init__(self, *args, **kwargs):

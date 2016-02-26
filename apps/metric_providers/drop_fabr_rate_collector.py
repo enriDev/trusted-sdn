@@ -58,7 +58,7 @@ class DropFabrRateCollector(TrustCollectorBase):
     # time before starting request
     INIT_TIME = 5
     # time interval between port stats requests 
-    DEFAULT_REQUEST_INTERVAL = 10  #(sec)
+    DEFAULT_REQUEST_INTERVAL = 7  #(sec)
     
     
     # balance between drop rate and fabrication rate
@@ -241,6 +241,8 @@ class DropFabrRateCollector(TrustCollectorBase):
         datapath = msg.datapath
         body = msg.body
         
+        #self._log_port_statistics(msg, LOG)
+        
         #LOG.info('TRUST_EVAL-EVENT: port statistics for dp %016x', datapath.id)
         # TODO in case of EventSwitchLeave while a request is pending, the counter is
         #      never reset
@@ -361,15 +363,15 @@ class DropFabrRateCollector(TrustCollectorBase):
         # counters for statistic    
         rx_pkts = tx_pkts = rx_err = tx_err = 0     
                 
-        logger.info('datapath         port        rx-pkts  tx-pkts  rx-err   tx-err   rx_drop   tx_drop')
-        logger.info('---------------- ---------- -------- -------- -------- -------- -------- --------')
+        logger.info('datapath         port        rx-pkts  tx-pkts  rx-err   tx-err   rx_drop   tx_drop  tx_bytes duration ')
+        logger.info('---------------- ---------- -------- -------- -------- -------- -------- -------- -------- --------')
             
         for stat in sorted( port_msg.body, key =  attrgetter('port_no') ):
-            logger.info('%016x %10d %8d %8d %8d %8d %8d %8d',
+            logger.info('%016x %10d %8d %8d %8d %8d %8d %8d %16d %8d',
                              port_msg.datapath.id, stat.port_no,
                              stat.rx_packets, stat.tx_packets,
                              stat.rx_errors, stat.tx_errors, 
-                             stat.rx_dropped, stat.tx_dropped)
+                             stat.rx_dropped, stat.tx_dropped, stat.tx_bytes, stat.duration_sec)
             rx_pkts += stat.rx_packets
             tx_pkts += stat.tx_packets
             rx_err += stat.rx_errors
@@ -378,7 +380,7 @@ class DropFabrRateCollector(TrustCollectorBase):
         logger.info('-------------------------------------------------------------------------------')
         logger.info('            Tot:          %8d %8d %8d %8d',
                          rx_pkts, tx_pkts, rx_err, tx_err)
-        logger.info('Measured pakets drop rate: %f', self.get_flow_conservation(port_msg.datapath.id))
+       #logger.info('Measured pakets drop rate: %f', self.get_flow_conservation(port_msg.datapath.id))
         logger.info('')
     
 

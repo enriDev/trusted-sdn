@@ -74,7 +74,6 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
                                                   self.DEFAULT_TRUST_METRIC,
                                                   *args, **kwargs)
         self.link_features = {}   # link -> feature_name -> value
-        #self.sw_features = {}     # sw -> feature_name -> value 
     
     
     @set_ev_cls(event.EventLinkAdd)
@@ -84,7 +83,6 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         link = ev.link
         #the proprieties relative to switche only in a link are referred to the dst  
         self.link_features.setdefault( link, {'drop_rate':0.0, 'fabr_rate':0.0, 'malicious_mod':0} )    
-        #self.sw_features.setdefault( link.dst.dpid, {'fabr_rate':0.0, 'malicious_mod':0} )
     
     
     @set_ev_cls(trustevents.EventMaliciousFlowTblMod)
@@ -94,8 +92,6 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         for link in self.link_features.keys():
             if link.dst.dpid == dpid:
                 self.link_features[link]['malicious_mod'] = 1
-        #self.sw_features.setdefault(dpid, {})
-        #self.sw_features[dpid]['malicious_mod'] = 1
     
         
     @set_ev_cls(trustevents.EventFabrRateUpdate)
@@ -105,8 +101,6 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         for link in self.link_features.keys():
             if link.dst.dpid == dpid:
                 self.link_features[link]['fabr_rate'] = ev.fabr_rate
-        #self.sw_features.setdefault(dpid, {})
-        #self.sw_features[dpid]['fabr_rate'] = ev.fabr_rate
     
         
     @set_ev_cls(trustevents.EventLinkDropRateUpdate)
@@ -121,13 +115,11 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         
         for link in self.links_metric:
             
-            #if self.sw_features[link.dst.dpid]['malicious_mod'] == 0:
             if self.link_features[link]['malicious_mod'] == 0:     
                 # TODO ugly if within for cycle. Find alternative solution
                
                 drop_rate = self.link_features[link]['drop_rate']
                 fabr_rate = self.link_features[link]['fabr_rate']
-                #fabr_rate = self.sw_features[link.dst.dpid]['fabr_rate']
                     
                 actual_metric = self.exp_smoothing(self.DROP_WEIGHT, drop_rate, 
                                                     self.FABR_WEIGHT, fabr_rate)

@@ -10,7 +10,6 @@ according to some parameters and raise events for publishing the trust evaluatio
 @author: root
 '''
 
-
 from __future__ import division
 from operator import attrgetter
 import logging
@@ -20,17 +19,12 @@ from ryu.lib import hub
 from ryu.ofproto import ofproto_v1_3 as ofproto13
 from ryu.ofproto import ofproto_v1_3_parser as parser13
 from ryu.controller import ofp_event 
-from ryu.controller import handler
-from ryu.controller.handler import MAIN_DISPATCHER, CONFIG_DISPATCHER, HANDSHAKE_DISPATCHER, DEAD_DISPATCHER
+from ryu.controller.handler import MAIN_DISPATCHER, DEAD_DISPATCHER
 from ryu.controller.handler import set_ev_cls
-from ryu.topology.api import get_switch, get_link
-from ryu.topology import event, switches 
+from ryu.topology import event
 from ryu.topology.switches import LLDPCounter
-from ryu.ofproto import ether
-from ryu.lib.packet import packet, ethernet, vlan
-from ryu.lib.mac import BROADCAST_STR
-from ryu.lib.packet.lldp import LLDP_MAC_NEAREST_BRIDGE
-from ryu.lib.packet.ether_types import ETH_TYPE_LLDP
+
+
 
 import trustevents
 from trust_collector_base import TrustCollectorBase
@@ -45,8 +39,6 @@ TABLE_MISS_TB_ID = 0                # table id for miss priority
 STAT_REQ_TIMING_THRESH = 5
 
 
-    
-    
         
 class DropFabrRateCollector(TrustCollectorBase):
     """ Monitor switches port statistics to evaluate:
@@ -55,26 +47,12 @@ class DropFabrRateCollector(TrustCollectorBase):
         - link drop rate
     """
     
-    # time before starting request
-    INIT_TIME = 5
-    # time interval between port stats requests 
-    DEFAULT_REQUEST_INTERVAL = 7  #(sec)
-    
-    
-    # balance between drop rate and fabrication rate
-    # the link trust is (1 - SW_TRUST_WEIGHT)
-    DROP_WEIGHT = 0.8
-    FABRICATION_WEIGHT = 1 - DROP_WEIGHT
-    
-    # parameter used for stabilize drop and fabr rate. (see line 474)
-    STABILIZATION_PARAM = 10
-    
-    # switch to controller port
-    SW_TO_CONTR_PORT = 4294967294
+    SW_TO_CONTR_PORT = 4294967294   # port from switch to controller
+    DEFAULT_REQUEST_INTERVAL = 7    # time interval between port stats requests 
+    STABILIZATION_PARAM = 10        # stabilize drop and fabr rate. (see line 327)
     
     # events raised by the app
     _EVENTS = [trustevents.EventLinkDropRateUpdate, trustevents.EventFabrRateUpdate]
-    
     
     def __init__(self, *args, **kwargs):
         
@@ -91,41 +69,7 @@ class DropFabrRateCollector(TrustCollectorBase):
         # bool to check if first statistic request
         self.is_first_stat_req = True
         
-        self.threads.append( hub.spawn_after(self.LOAD_TIME, self._stats_request_loop) )
-        
-        
-
-    
-    #Utility class for representing statistics for drop rate computation
-    class _SwDropStatistics(object):
-        
-        tx_pkts = rx_pkts = table_miss_pkts = 0 
-        drop_rate = 0.0
-        
-        
-    class _PortStat(object):
-        
-        port_no = 0
-        tx_pkts = 0
-        rx_pkts = 0
-        
-        def get_string(self):
-            return "port: ", self.port_no,' rx: ',self.rx_pkts,' tx: ',self.tx_pkts
-     
-    
-    # runs statistics requests in a separate thread
-    def _stats_request_loop(self):
-        
-        # stop lldp_loop thread in switches module
-        #sw = app_manager.lookup_service_brick('switches')
-        #sw.is_active = False
-        
-        LOG.info("DROP-FABR-RATE: Starting statistics requests...")
-        while True:
-            for datapath in self.datapaths.values():
-                self._multi_stats_request(datapath)
-            hub.sleep(self.DEFAULT_REQUEST_INTERVAL)
-            self.is_first_stat_req = False
+        self.threads.append( hub.spawn_after(self.LOAD_TIME, self._stats_request_loop) )     
         
         
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
@@ -140,38 +84,14 @@ class DropFabrRateCollector(TrustCollectorBase):
                 
                 self.datapaths[datapath.id] = datapath
                 self.datapaths_stats.setdefault(datapath.id, SwStatistic(datapath.id)) 
-                LOG.info('Register datapath: %016x', datapath.id)
-                
-                # install table-miss entry: drop
-                #priority = TABLE_MISS_PRIORITY
-                #table_id = TABLE_MISS_TB_ID
-                #match = parser.OFPMatch()
-                #actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
-                                          #ofproto.OFPCML_NO_BUFFER)] # changed
-                #actions = []
-                #self._add_flow(datapath, match, actions, priority, table_id)
-                #LOG.info('Install table-miss entry to dp: %016x - action: drop', datapath.id)
-                
+                LOG.info('Register datapath: %016x', datapath.id)                
                 
         elif ev.state == DEAD_DISPATCHER:
             if datapath.id in self.datapaths:
                 del self.datapaths[datapath.id]
                 del self.datapaths_stats[datapath.id]
                 LOG.info('Unregister datapath: %016x', datapath.id)
-                
-    
-    #def _add_flow (self, datapath, match, actions, priority = 0, table_id = 0):
-        
-    #    ofproto = datapath.ofproto
-    #    parser = datapath.ofproto_parser
-        
-    #    inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
-    #    flow_mod = parser.OFPFlowMod(
-    #                                 datapath = datapath, match = match, table_id = table_id,
-    #                                 command = ofproto.OFPFC_ADD, 
-    #                                 priority = priority, instructions = inst)
-    #    datapath.send_msg(flow_mod)
-    
+                    
 
     @set_ev_cls(event.EventLinkAdd)
     def new_link_event_handler(self, ev):
@@ -182,28 +102,15 @@ class DropFabrRateCollector(TrustCollectorBase):
         #print '***links'
         #print self.link_list
 
-
-
-    def _multi_stats_request(self, datapath):
         
-        #LOG.info('SWITCH_EVAL: Statistic request: dp %016x', datapath.id)
+    def _stats_request_loop(self):
         
-        #self._lldp_match_stats_request(datapath)
-        self._port_stats_request(datapath)    
-    
- 
-    def _lldp_match_stats_request(self, datapath):
-        
-        #LOG.info('Table-miss statistics request: dp %016x', datapath.id)
-        
-        ofproto = datapath.ofproto
-        of_parser = datapath.ofproto_parser
-        
-        # table-miss flow statistics request
-        match = of_parser.OFPMatch(eth_dst = LLDP_MAC_NEAREST_BRIDGE, eth_type = ETH_TYPE_LLDP)
-        out_port = ofproto.OFPP_CONTROLLER
-        request = of_parser.OFPFlowStatsRequest(datapath = datapath, match = match, table_id = TABLE_MISS_TB_ID, out_port = out_port) 
-        datapath.send_msg(request)
+        LOG.info("DROP-FABR-RATE: Starting statistics requests...")
+        while True:
+            for datapath in self.datapaths.values():
+                self._port_stats_request(datapath)
+            hub.sleep(self.DEFAULT_REQUEST_INTERVAL)
+            self.is_first_stat_req = False
 
         
     def _port_stats_request(self, datapath):
@@ -217,21 +124,6 @@ class DropFabrRateCollector(TrustCollectorBase):
         request = of_parser.OFPPortStatsRequest(datapath, 0, ofproto.OFPP_ANY)
         datapath.send_msg(request)
         self.pending_stats_req += 1
-        
-    
-    #set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
-    def _lldp_match_stats_reply_handler(self, ev):
-        
-        msg = ev.msg
-        datapath = msg.datapath
-        body = msg.body
-        
-        if datapath.id in self.datapaths_stats:
-            lldp_match = 0
-            for stat in body: lldp_match = stat.packet_count
-            self.datapaths_stats[datapath.id].update_lldp_stat(lldp_match)
-            LOG.info('TRUST_EVAL-EVENT: LLDP match for dp %016x : %d', datapath.id, lldp_match)
-
       
     
     @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
@@ -243,7 +135,6 @@ class DropFabrRateCollector(TrustCollectorBase):
         
         #self._log_port_statistics(msg, LOG)
         
-        #LOG.info('TRUST_EVAL-EVENT: port statistics for dp %016x', datapath.id)
         # TODO in case of EventSwitchLeave while a request is pending, the counter is
         #      never reset
         self.pending_stats_req -= 1
@@ -261,19 +152,12 @@ class DropFabrRateCollector(TrustCollectorBase):
                 new_stat.rx_pkts = stat.rx_packets
                 new_stat.tx_pkts = stat.tx_packets
                 self.datapaths_stats[datapath.id].update_port_stat(new_stat, stat.port_no)
-                
-        #self._log_inter_port_stats(self.logger, datapath.id)
-        
         
         # compute drop rate for the switch
         sw_drop_rate, sw_fabr_rate = self.datapaths_stats[datapath.id].get_flow_conservation()
-        LOG.info("DROP-FABR-RATE: Flow conservation property for dp %s: drop=%s%%  fabr=%s%%", datapath.id, sw_drop_rate*100, sw_fabr_rate*100)
-        #self._log_port_statistics(msg, self.logger)    
+        LOG.info("DROP-FABR-RATE: Flow conservation property for dp %s: drop=%s%%  fabr=%s%%", datapath.id, sw_drop_rate*100, sw_fabr_rate*100) 
               
-        # raise event for switch drop rate
-        #trust_ev = trustevents.EventSwitchTrustChange(datapath.id, sw_drop_rate)
         if not self.is_first_stat_req:
-            # self.send_event_to_observers(trust_ev)
             # compute drop rate for all links if no requests are pending
             if self.pending_stats_req == 0 :
                 self.link_drop_rate()
@@ -281,16 +165,12 @@ class DropFabrRateCollector(TrustCollectorBase):
     
     def link_drop_rate(self):
             
-        #print 'DEBUG: link drop rate eval'
-            
         for link in self.link_list:
             
             src = link.src
             dst = link.dst
-            
             src_sw_statistic = self.datapaths_stats[src.dpid]
             dst_sw_statistic = self.datapaths_stats[dst.dpid]
-            
             src_tw_port_stat = src_sw_statistic.tw_port_stat_dict[src.port_no]
             dst_tw_port_stat = dst_sw_statistic.tw_port_stat_dict[dst.port_no] 
             
@@ -303,7 +183,7 @@ class DropFabrRateCollector(TrustCollectorBase):
             try:
                 diff_tx_rx = src_tx - dst_rx
                 
-                # see line 474
+                # see line 327
                 if diff_tx_rx >= self.STABILIZATION_PARAM:
                     link_drp_rate = (src_tx - dst_rx) / (src_tx)
                     link_drp_rate = round( link_drp_rate, 4 )
@@ -312,33 +192,18 @@ class DropFabrRateCollector(TrustCollectorBase):
                 # if no packets has been sent or received ignore zero division 
                 pass
             
-            #TODO renaming
+            dst_sw_drp_rate = dst_sw_statistic.drop_rate                                   # drop rate dst switch
+            overall_drop_rate = self.get_drop_probability(dst_sw_drp_rate, link_drp_rate)  # drop rate of link and switch   
+            dst_sw_fabr_rate = dst_sw_statistic.fabrication_rate                           # fabrication rate of dst switch
             
-            # drop rate of destination switch
-            dst_sw_drp_rate = dst_sw_statistic.drop_rate 
-            
-            # link drop rate
-            combined_drop_rate = self.get_combined_drop_rate(dst_sw_drp_rate, link_drp_rate)
-            
-            # switch fabrication rate
-            dst_sw_fabr_rate = dst_sw_statistic.fabrication_rate
-        
-            #print "DEBUG trust metric for dp: ", dst.dpid," comb drop= ", combined_drop_rate," fabr= ",dst_sw_fabr_rate
-            
-            
-            #trust_metric = self.get_trust_metric(combined_drop_rate, dst_sw_fabr_rate)
-            #assert (trust_metric >= 0)
-            #trust_ev = trustevents.EventDropFabrRate(link, trust_metric)
-            #self.send_event_to_observers(trust_ev)
-            
-            event_droprate = trustevents.EventLinkDropRateUpdate(link, combined_drop_rate)
+            event_droprate = trustevents.EventLinkDropRateUpdate(link, overall_drop_rate)
             event_fabrrate = trustevents.EventFabrRateUpdate(link.dst.dpid, dst_sw_fabr_rate) 
             self.send_event_to_observers(event_droprate)
             self.send_event_to_observers(event_fabrrate)      
         
         
-    def get_combined_drop_rate(self, sw_drop, link_drop):      
-        # the following computation return the probability of the pkt drop for a link
+    def get_drop_probability(self, sw_drop, link_drop):      
+        ''' compute the probability of drop in the switch or link'''
         
         drop_rate = sw_drop + link_drop - (sw_drop * link_drop)
         
@@ -346,16 +211,8 @@ class DropFabrRateCollector(TrustCollectorBase):
             print "DEBUG NEGATIVE DROP RATE: "
             print "sw_drop= ", sw_drop," link_drop= ", link_drop
             
-        
         drop_rate = round(drop_rate, 4)        
         return drop_rate
-        
-        
-    def get_trust_metric(self, drop_rate, fabr_rate):
-        
-        trust_metric = (self.DROP_WEIGHT*drop_rate) + (self.FABRICATION_WEIGHT*fabr_rate)
-        trust_metric = round(trust_metric, 4) 
-        return trust_metric
     
         
     def _log_port_statistics (self, port_msg, logger):
@@ -399,18 +256,16 @@ class SwStatistic(object):
     
     def __init__(self, dpid):
         
-        # referenc to switches app
         self.switches_app_ref = app_manager.lookup_service_brick('switches')
         self.dpid = dpid
         
         # statistics "history"
-        self.port_stat_dict = {}     # current statistics per port
-        self.tw_port_stat_dict = {}  # time window statistics per port
-        self.lldp_counter = LLDPCounter(dpid)     # current lldp counter
-        self.tw_lldp_counter = LLDPCounter(dpid)  # time window lldp counter
-        
-        self.drop_rate = 0.0         
-        self.fabrication_rate = 0.0  
+        self.port_stat_dict = {}                    # port -> PortStat (current)
+        self.tw_port_stat_dict = {}                 # port -> PortStat (time window)
+        self.lldp_counter = LLDPCounter(dpid)       # lldp counter (current)
+        self.tw_lldp_counter = LLDPCounter(dpid)    # lldp counter (time window)
+        self.drop_rate = 0.0                        # drop rate
+        self.fabrication_rate = 0.0                 # fabrication rate
     
     
     def update_lldp_counter(self, new_lldp_counter):
@@ -456,10 +311,10 @@ class SwStatistic(object):
         
         # the total num of rx and tx pkts can't be negative
         if rx < 0 :
-            LOG.info("SW_STATS: Negative tot rx pkts for dp %s = %s ", self.dpid, rx)
+            #LOG.info("SW_STATS: Negative tot rx pkts for dp %s = %s ", self.dpid, rx)
             rx = 0
         if tx < 0 :
-            LOG.info("SW_STATS: Negative tot rx pkts for dp %s = %s ", self.dpid, tx) 
+            #LOG.info("SW_STATS: Negative tot rx pkts for dp %s = %s ", self.dpid, tx) 
             tx = 0
                     
         # For the computation of drop rate and fabrication rate we take into 

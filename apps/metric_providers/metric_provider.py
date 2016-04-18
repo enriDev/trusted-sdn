@@ -38,6 +38,7 @@ import trust_event
 from ryu.lib.mac import BROADCAST_STR
 from ryu.lib.packet.lldp import LLDP_MAC_NEAREST_BRIDGE
 from ryu.lib.packet.ether_types import ETH_TYPE_LLDP
+from pip.locations import src_prefix
 
 
 ##### GLOBAL VARIABLE ####

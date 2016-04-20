@@ -192,27 +192,30 @@ class DropFabrRateCollector(TrustCollectorBase):
                 # if no packets has been sent or received ignore zero division 
                 pass
             
-            dst_sw_drp_rate = dst_sw_statistic.drop_rate                                   # drop rate dst switch
-            overall_drop_rate = self.get_drop_probability(dst_sw_drp_rate, link_drp_rate)  # drop rate of link and switch   
-            dst_sw_fabr_rate = dst_sw_statistic.fabrication_rate                           # fabrication rate of dst switch
+            dst_sw_drp_rate = dst_sw_statistic.drop_rate                                           # drop rate dst switch
+            overall_non_drop_rate = self.get_non_drop_probability(dst_sw_drp_rate, link_drp_rate)  # non drop rate of link and switch   
+            dst_sw_non_fabr_rate = (1 - dst_sw_statistic.fabrication_rate)                         # non fabrication rate of dst switch
             
-            event_droprate = trustevents.EventLinkDropRateUpdate(link, overall_drop_rate)
-            event_fabrrate = trustevents.EventFabrRateUpdate(link.dst.dpid, dst_sw_fabr_rate) 
+            event_droprate = trustevents.EventLinkDropRateUpdate(link, overall_non_drop_rate)
+            event_fabrrate = trustevents.EventFabrRateUpdate(link.dst.dpid, dst_sw_non_fabr_rate) 
             self.send_event_to_observers(event_droprate)
             self.send_event_to_observers(event_fabrrate)      
+    
         
-        
-    def get_drop_probability(self, sw_drop, link_drop):      
+    def get_non_drop_probability(self, sw_drop, link_drop):      
         ''' compute the probability of drop in the switch or link'''
         
-        drop_rate = sw_drop + link_drop - (sw_drop * link_drop)
+        #drop_rate = sw_drop + link_drop - (sw_drop * link_drop)
         
-        if drop_rate < 0: 
+        non_drop_rate = (1-sw_drop) * (1-link_drop)
+        
+        if non_drop_rate < 0: 
             print "DEBUG NEGATIVE DROP RATE: "
             print "sw_drop= ", sw_drop," link_drop= ", link_drop
             
-        drop_rate = round(drop_rate, 4)        
-        return drop_rate
+        non_drop_rate = round(non_drop_rate, 4)      
+        #print "overall drop: sw/link/nondrop",sw_drop,"/",link_drop,"/",non_drop_rate  
+        return non_drop_rate
     
         
     def _log_port_statistics (self, port_msg, logger):

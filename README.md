@@ -1,4 +1,10 @@
 # trusted-sdn
+Update of Trust Model:
+	- edited pckts drop rate output
+	- edited pkts fabr rate output
+	- edited mal flow tbl mod rate output
+	- edited aggregation function
+
 New added features new features:
 
 	- base classes to allow extension of system:

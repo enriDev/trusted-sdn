@@ -81,8 +81,8 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         
         #TODO refactor
         link = ev.link
-        #the proprieties relative to switche only in a link are referred to the dst  
-        self.link_features.setdefault( link, {'drop_rate':0.0, 'fabr_rate':0.0, 'malicious_mod':0} )    
+        #the proprieties relative to switch only in a link are referred to the dst  
+        self.link_features.setdefault( link, {'drop_rate':1.0, 'fabr_rate':1.0, 'malicious_mod':1} )    
     
     
     @set_ev_cls(trustevents.EventMaliciousFlowTblMod)
@@ -91,7 +91,7 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         dpid = ev.dpid
         for link in self.link_features.keys():
             if link.dst.dpid == dpid:
-                self.link_features[link]['malicious_mod'] = 1
+                self.link_features[link]['malicious_mod'] = 0
     
         
     @set_ev_cls(trustevents.EventFabrRateUpdate)
@@ -100,35 +100,48 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         dpid = ev.dpid
         for link in self.link_features.keys():
             if link.dst.dpid == dpid:
-                self.link_features[link]['fabr_rate'] = ev.fabr_rate
+                #custom non_fabr_rate
+                non_fabr_rate = self.custom_non_fabr_rate(ev.fabr_rate) 
+                self.link_features[link]['fabr_rate'] = non_fabr_rate
+                print 'EVENT-FABR_RATE: ',link.src.dpid,"->",link.dst.dpid," = ",ev.fabr_rate,"/",non_fabr_rate
     
+    def custom_non_fabr_rate(self, non_fabr_rate):
+        custom_non_fabr = pow(non_fabr_rate,2)
+        return round(custom_non_fabr, 2)
         
     @set_ev_cls(trustevents.EventLinkDropRateUpdate)
     def drop_update_handler(self, ev):
         
         link = ev.link
         self.link_features.setdefault(link, {})
-        self.link_features[link]['drop_rate'] = ev.drop_rate 
-    
+        # custom non_drop_rate
+        non_drop_rate = self.custom_non_drop_rate(ev.drop_rate)
+        self.link_features[link]['drop_rate'] = non_drop_rate 
+        print "EVENT-DROPRATE: ",link.src.dpid,"->",link.dst.dpid," = ",ev.drop_rate,"/",non_drop_rate
+
+    def custom_non_drop_rate(self, non_drop_rate):
+        custom_non_drop = pow(non_drop_rate,2)
+        return round(custom_non_drop, 2)
 
     def compute_metric(self):
         
         for link in self.links_metric:
             
-            if self.link_features[link]['malicious_mod'] == 0:     
-                # TODO ugly if within for cycle. Find alternative solution
+            if self.link_features[link]['malicious_mod'] == 1:
                
-                drop_rate = self.link_features[link]['drop_rate']
-                fabr_rate = self.link_features[link]['fabr_rate']
-                    
-                actual_metric = self.exp_smoothing(self.DROP_WEIGHT, drop_rate, 
-                                                    self.FABR_WEIGHT, fabr_rate)
-                    
-                current_metric = self.links_metric[link]
-                smoothed_metric = self.exp_smoothing(self.CURRENT_METRIC_WEIGHT, current_metric,
-                                                    self.NEW_METRIC_WEIGHT, actual_metric)
-                smoothed_metric = round(smoothed_metric, 2)
+                non_drop_rate = self.link_features[link]['drop_rate']
+                non_fabr_rate = self.link_features[link]['fabr_rate']
                 
+                trust_value = self.aggregation_func(non_drop_rate, non_fabr_rate)
+                new_trust_metric = (1 - trust_value)
+                print "trust_value/metric:", link.src.dpid, "->",link.dst.dpid, " = ",  trust_value,"/",new_trust_metric
+            
+                current_trust_metric = self.links_metric[link]
+            
+                smoothed_metric = self.exp_smoothing(self.CURRENT_METRIC_WEIGHT, current_trust_metric,
+                                                    self.NEW_METRIC_WEIGHT, new_trust_metric)
+                smoothed_metric = round(smoothed_metric, 2)
+            
                 if smoothed_metric < self.DEFAULT_TRUST_METRIC:
                     smoothed_metric = self.DEFAULT_TRUST_METRIC
                 
@@ -136,8 +149,10 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
                 
             else:
                 self.links_metric[link] = self.MAX_TRUST_METRIC
-
-            
+                
+    
+    def aggregation_func(self, non_drop, non_fabr):
+        return min(non_drop, non_fabr)        
             
     @staticmethod        
     def exp_smoothing(weight_1, param_1, weight_2, param_2):

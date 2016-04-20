@@ -314,7 +314,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
             
             # drop rate of destination switch
             dst_sw_drp_rate = dst_sw_statistic.drop_rate 
-            combined_drop_rate = self.get_drop_probability(dst_sw_drp_rate, link_drp_rate)
+            combined_drop_rate = self.get_non_drop_probability(dst_sw_drp_rate, link_drp_rate)
             dst_sw_fabr_rate = dst_sw_statistic.fabrication_rate
         
             #print "DEBUG trust metric for dp: ", dst.dpid," comb drop= ", combined_drop_rate," fabr= ",dst_sw_fabr_rate
@@ -327,7 +327,7 @@ class SwitchLinkTrustEvaluator(app_manager.RyuApp):
             self.send_event_to_observers(trust_ev)       
         
         
-    def get_drop_probability(self, sw_drop, link_drop):      
+    def get_non_drop_probability(self, sw_drop, link_drop):      
         # the following computation return the probability of the pkt drop
         
         drop_rate = sw_drop + link_drop - (sw_drop * link_drop)

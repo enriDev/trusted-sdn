@@ -44,7 +44,7 @@ class OFTblModProvider(app_manager.RyuApp):
     def ofAddFlow(self, datapath, match, actions, priority=ofproto13.OFP_DEFAULT_PRIORITY, idle_timeout = 0, buffer_id=None):
         """" Utility method: add OpenFlow table entry"""
         
-        LOG.info("**ADD_FLOW: dp: %s | match: %s | actions: %s | prio: %s", datapath.id, match, actions, priority)
+        LOG.info("+++ADD_FLOW: \n  -dp: %s\n  -match: %s\n  -priority: %s\n  -actions: %s>>", datapath.id, match, priority, actions)
         
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
@@ -69,7 +69,7 @@ class OFTblModProvider(app_manager.RyuApp):
     def ofDelFlow(self, datapath, match, priority = ofproto13.OFP_DEFAULT_PRIORITY):
         """" Utility method: del OpenFlow table entry"""
         
-        LOG.info("**DEL_FLOW: dp: %s | match: %s | prio: %s", datapath.id, match, priority)
+        LOG.info("---DEL_FLOW: dp: %s | match: %s | prio: %s", datapath.id, match, priority)
         
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
@@ -97,7 +97,7 @@ class OFTblModProvider(app_manager.RyuApp):
                                         in_port = msg.match['in_port'], actions = actions, data = data)
         
         pck = packet.Packet(msg.data)
-        LOG.info("**PKT_OUT: dp: %s | msg: %s | out_port: %s", datapath.id, (pck,), out_port)
+        LOG.info("***PKT_OUT: dp: %s | msg: %s | out_port: %s", datapath.id, (pck,), out_port)
         
         datapath.send_msg(of_pckOut)
         

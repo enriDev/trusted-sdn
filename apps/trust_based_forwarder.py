@@ -74,7 +74,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     # weight used to balance a new trust update
     # The NEW_TRUST_VALUE_WEIGHT = (1 - OLD_TRUST_VALUE_WEIGHT)
     OLD_TRUST_VALUE_WEIGHT = 0.6
-    METRIC_UPDATE_INTER = 8        # interval between metric update
+    METRIC_UPDATE_INTER = 2        # interval between metric update
 
 
     def __init__(self, *args, **kwargs):
@@ -224,7 +224,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
     
     def metric_update_loop(self):
         
-        LOG.info('TRUST_FORWARDER: Starting metric update loop (%ss interval)...', 
+        LOG.info('FORWARDER: Starting metric update loop (%ss interval)...', 
                  self.METRIC_UPDATE_INTER)
         
         while True:
@@ -301,7 +301,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
             ip_src = ipv4_pkt.src
         
         else:
-            LOG.info("TRUST_FORWARDER: Unhandled case, ip not found:")
+            LOG.info("FORWARDER: Unhandled case, ip not found:")
             LOG.info('\t'+'From dpid %s: %s \n',dpid, (pck,))
             return
         
@@ -311,10 +311,10 @@ class TrustBasedForwarder(app_manager.RyuApp):
             # retrive the mac from ip
             dst = self.cache_ip_mac[ip_dst]
         except KeyError:
-            LOG.info("TRUST_FORWARDER: ip->mac mapping error")
+            LOG.info("FORWARDER: ip->mac mapping error")
             return 
         
-        LOG.info("TRUST_FORWARDER: RoutingPath used: %s", routing_path.__class__.__name__)
+        LOG.info("FORWARDER: Routing algorithm used: %s", routing_path.__class__.__name__)
         path = routing_path.compute_routing_path(dpid, dst)
         self.install_routing_path(path, msg)
      
@@ -339,13 +339,16 @@ class TrustBasedForwarder(app_manager.RyuApp):
                     
              
     def compute_routing_path(self, src, dst, weight = None):
-        """ Return a list of nodes for the path
-            @weight String. If "weight" trusted path is computed 
+        """ 
+        Return a list of nodes for the path
+        
+        @type weight:    string
+        @param weight:  If weight="weight" trusted path is computed 
         """        
         try:
-            LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
+            #LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
             path = nx.shortest_path(self.net, src, dst, weight)
-            LOG.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
+            LOG.info("PATH_SEARCH: %s --> %s path =  %s",src, dst, path)
             return path
         
         except nx.NetworkXNoPath:
@@ -370,7 +373,7 @@ class TrustBasedForwarder(app_manager.RyuApp):
             
             # build match from msg
             match = CustomOFPMatch.build_from_msg(msg)
-            print "DEBUG: build match from msg:/n", match 
+            #print "DEBUG: build match from msg:\n <<", match, ">>" 
             
             # exclude in the loop the last node in the path because it is an host
             for i in range( len(path)-2, -1, -1 ):
@@ -414,14 +417,14 @@ class RandomRoutingPath(RoutingPathBase):
     def compute_routing_path(self, src, dst):
         
         try:
-            LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
+            #LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
             
             path_generator = nx.all_shortest_paths(self.net, src, dst, weight=None) 
             path_list = [p for p in path_generator]
             selected_path = randint( 0, len(path_list)-1 )
             path = path_list[selected_path]
             
-            LOG.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
+            LOG.info("PATH_SEARCH: %s --> %s - path=%s",src, dst, path)
             return path
         
         except nx.NetworkXNoPath:
@@ -442,9 +445,9 @@ class TrustedRoutingPath(RoutingPathBase):
     def compute_routing_path(self, src, dst):
       
         try:
-            LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
+            #LOG.info("PATH_SEARCH: Path %s --> %s",src, dst)
             path = nx.dijkstra_path(self.net, src, dst, weight='weight')
-            LOG.info("PATH_SEARCH: Path %s --> %s :\n %s",src, dst, path)
+            LOG.info("PATH_SEARCH: %s --> %s - path=%s",src, dst, path)
             return path
         
         except nx.NetworkXNoPath:

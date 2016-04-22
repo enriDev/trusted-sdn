@@ -140,9 +140,11 @@ class FlowTableDb():
         
         
     def flow_table_query(self, dpid):
-        ''' query flow table entry 
-        @dpid    datapath id
-        return   list of tuple that represent flow entries
+        ''' 
+        query flow table entry
+         
+        @param dpid:   datapath id
+        @return:       list of tuple that represent flow entries
         '''
         try:
             cur = self.conn.cursor()

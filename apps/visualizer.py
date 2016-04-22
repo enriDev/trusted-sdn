@@ -43,7 +43,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from pylab import *
-import time
+import ytime
 import threading
 import thread
 from multiprocessing import Process, Queue
@@ -74,7 +74,7 @@ class MetricPlotter(app_manager.RyuApp):
         
     def start(self):
         app_manager.RyuApp.start(self) #TODO check the override method
-        hub.spawn(self.query_metric)
+        hub.spawn(self.log_trust_data)
         hub.spawn(self.load_plotter_engine)
         
         
@@ -86,7 +86,7 @@ class MetricPlotter(app_manager.RyuApp):
         #plotter.start()
     
     
-    def query_metric(self):
+    def log_trust_data(self):
         
         while True:
             trust_metric_prov_ref = app_manager.lookup_service_brick('trust_metric_provider')
@@ -101,7 +101,7 @@ class MetricPlotter(app_manager.RyuApp):
             
             for (s,d,w) in trust_frw_ref.net.edges(data='weight'):
                 if str(s) == '4' and str(d) == '2':
-                    self.links_queue.put(w)
+                    self.links_queue.put(1-w)
             hub.sleep(1)
             
             
@@ -144,18 +144,18 @@ class MultiPlotter(Process):
     
     def run(self):
         
-        self.start_time = time.time()
+        self.start_time = ytime.ytime()
         print 'starting gui and queue reader'
         
         self.anim = animation.FuncAnimation(self.fig, self.update_plot, blit=False, interval=20,
                                             repeat=False, init_func=self.init_graph )
         plt.show()
-        time.sleep(2)
+        ytime.sleep(2)
         
         
     def update_plot(self, data):
         
-        delta_time = time.time() - self.start_time
+        delta_time = ytime.ytime() - self.start_time
         
         try:
             msg = self.queue.get(block=False)
@@ -218,7 +218,7 @@ class Plotter(Process):
             
         super(Plotter, self).__init__()
         self.queue = queue
-        self.actual_value = 0.01
+        self.actual_value = 0.99
     
     
     def init_graph(self):
@@ -233,13 +233,13 @@ class Plotter(Process):
         
     def run(self):
         
-        self.start_time = time.time()
+        self.start_time = ytime.time()
         print 'starting gui and queue reader'
         
         self.anim = animation.FuncAnimation(self.fig, self.update_plot, blit=False, interval=20,
                                             repeat=False, init_func=self.init_graph )
         plt.show()
-        time.sleep(2)
+        ytime.sleep(2)
     
 
     def update_plot(self, data):
@@ -252,7 +252,7 @@ class Plotter(Process):
         
         metric = self.actual_value
         
-        delta_time = time.time() - self.start_time
+        delta_time = ytime.time() - self.start_time
         
         self.xdata.append(delta_time)
         self.ydata.append(metric)

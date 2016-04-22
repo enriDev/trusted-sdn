@@ -62,9 +62,7 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
     DEFAULT_TRUST_METRIC = 0.01
     MAX_TRUST_METRIC = 1
     MIN_TRUST_METRIC = 0.01
-    DROP_WEIGHT = 0.8
-    FABR_WEIGHT = 1-DROP_WEIGHT
-    CURRENT_METRIC_WEIGHT = 0.4
+    CURRENT_METRIC_WEIGHT = 0.7
     NEW_METRIC_WEIGHT = 1-CURRENT_METRIC_WEIGHT  
     
     
@@ -100,10 +98,13 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         dpid = ev.dpid
         for link in self.link_features.keys():
             if link.dst.dpid == dpid:
-                #custom non_fabr_rate
-                non_fabr_rate = self.custom_non_fabr_rate(ev.fabr_rate) 
-                self.link_features[link]['trust_fabr_rate'] = non_fabr_rate     # trust wrt fabr rate
-                self.link_features[link]['fabr_rate'] = round((1-ev.fabr_rate),2)        # fabr rate
+                
+                fabr_rate = round(ev.fabr_rate, 2)                              # fabrication probability
+                non_fabr_rate = (1 - fabr_rate)                                 # non fabrication probability
+                non_fabr_trust_rate = self.custom_non_fabr_rate(non_fabr_rate)  # trust rating wrt non fabrication
+                
+                self.link_features[link]['fabr_rate'] = fabr_rate
+                self.link_features[link]['trust_fabr_rate'] = non_fabr_trust_rate     # trust wrt fabr rate
                 #print 'EVENT-FABR_RATE: ',link.src.dpid,"->",link.dst.dpid," = ",ev.fabr_rate,"/",non_fabr_rate, "(real/custom trust)"
     
     def custom_non_fabr_rate(self, non_fabr_rate):
@@ -115,10 +116,13 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
         
         link = ev.link
         self.link_features.setdefault(link, {})
-        # custom non_drop_rate
-        non_drop_rate = self.custom_non_drop_rate(ev.drop_rate)
-        self.link_features[link]['trust_drop_rate'] = non_drop_rate     # trust wrt drop rate
-        self.link_features[link]['drop_rate'] = round((1-ev.drop_rate),2)      # drop rate
+        
+        drop_rate = round(ev.drop_rate, 2)                              # fabrication probability
+        non_drop_rate = (1 - drop_rate)                                 # non fabrication probability
+        non_drop_trust_rate = self.custom_non_drop_rate(non_drop_rate)  # trust rating wrt non fabrication
+                
+        self.link_features[link]['trust_drop_rate'] = non_drop_trust_rate     # trust wrt drop rate
+        self.link_features[link]['drop_rate'] = drop_rate    # drop rate
         #print "EVENT-DROPRATE: ",link.src.dpid,"->",link.dst.dpid," = ",ev.drop_rate,"/",non_drop_rate, "(real/custom trust)"
 
     def custom_non_drop_rate(self, non_drop_rate):
@@ -131,12 +135,12 @@ class TrustMetricProvider(metric_provider.MetricProviderBase):
             
             if self.link_features[link]['malicious_mod'] == 1:
                
-                non_drop_rate = self.link_features[link]['trust_drop_rate']
-                non_fabr_rate = self.link_features[link]['trust_fabr_rate']
+                non_drop_trust_rate = self.link_features[link]['trust_drop_rate']
+                non_fabr_trust_rate = self.link_features[link]['trust_fabr_rate']
                 
-                trust_value = self.aggregation_func(non_drop_rate, non_fabr_rate)
+                trust_value = self.aggregation_func(non_drop_trust_rate, non_fabr_trust_rate)
                 new_trust_metric = (1 - trust_value)
-                print "trust_value/metric:", link.src.dpid, "->",link.dst.dpid, " = ",  trust_value,"/",new_trust_metric
+                #print "trust_value/metric:", link.src.dpid, "->",link.dst.dpid, " = ",  trust_value,"/",new_trust_metric
             
                 current_trust_metric = self.links_metric[link]
             
